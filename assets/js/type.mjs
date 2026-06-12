@@ -118,7 +118,8 @@ export default class Type {
   }
 
   static componentStruct(data = {}) {
-    let {emittedContext, nextAction, nextCommand, nextPage, state} = data;
+    let {emittedContext, nextAction, nextCommand, nextPage, nextDestroy, state} =
+      data;
 
     if (typeof emittedContext === "undefined") {
       emittedContext = Type.map();
@@ -136,6 +137,10 @@ export default class Type {
       nextPage = Type.nil();
     }
 
+    if (typeof nextDestroy === "undefined") {
+      nextDestroy = Type.nil();
+    }
+
     if (typeof state === "undefined") {
       state = Type.map();
     }
@@ -145,6 +150,7 @@ export default class Type {
       [Type.atom("next_action"), nextAction],
       [Type.atom("next_command"), nextCommand],
       [Type.atom("next_page"), nextPage],
+      [Type.atom("next_destroy"), nextDestroy],
       [Type.atom("state"), state],
     ]);
   }

@@ -1065,6 +1065,15 @@ export default class Hologram {
       Client.sendCommand(nextCommand);
     }
 
+    const nextDestroy = Erlang_Maps["get/2"](
+      Type.atom("next_destroy"),
+      resultComponentStruct,
+    );
+
+    if (!Type.isNil(nextDestroy)) {
+      ComponentRegistry.deleteEntry(nextDestroy);
+    }
+
     let savedComponentStruct = Erlang_Maps["put/3"](
       Type.atom("next_action"),
       Type.nil(),
@@ -1077,7 +1086,17 @@ export default class Hologram {
       savedComponentStruct,
     );
 
-    ComponentRegistry.putComponentStruct(target, savedComponentStruct);
+    savedComponentStruct = Erlang_Maps["put/3"](
+      Type.atom("next_destroy"),
+      Type.nil(),
+      savedComponentStruct,
+    );
+
+    // The acting component may have destroyed itself via put_destroy; only write its struct back
+    // if it is still registered.
+    if (ComponentRegistry.isCidRegistered(target)) {
+      ComponentRegistry.putComponentStruct(target, savedComponentStruct);
+    }
 
     globalThis.Hologram.isProfilingEnabled = false;
 

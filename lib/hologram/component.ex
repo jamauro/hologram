@@ -7,7 +7,12 @@ defmodule Hologram.Component do
   alias Hologram.Server
   alias Hologram.Server.Broadcast
 
-  defstruct emitted_context: %{}, next_action: nil, next_command: nil, next_page: nil, state: %{}
+  defstruct emitted_context: %{},
+            next_action: nil,
+            next_command: nil,
+            next_page: nil,
+            next_destroy: nil,
+            state: %{}
 
   defmodule Action do
     defstruct delay: 0, name: nil, params: %{}, target: nil
@@ -31,6 +36,7 @@ defmodule Hologram.Component do
           next_action: Action.t() | nil,
           next_command: Command.t() | nil,
           next_page: module | {module, keyword},
+          next_destroy: String.t() | nil,
           state: %{atom => any}
         }
 
@@ -76,6 +82,7 @@ defmodule Hologram.Component do
       put_command: 2,
       put_command: 3,
       put_context: 3,
+      put_destroy: 2,
       put_page: 2,
       put_page: 3,
       put_state: 2,
@@ -334,6 +341,23 @@ defmodule Hologram.Component do
   @spec put_command(Component.t(), atom, keyword | map) :: Component.t()
   def put_command(%Component{} = component, name, params) do
     %{component | next_command: %Command{name: name, params: Map.new(params)}}
+  end
+
+  @doc """
+  Records a component `cid` to be destroyed after the current action finishes executing.
+
+  Hologram retains a stateful component's state in the client-side registry even after the
+  component stops being rendered, so revisiting it is instant. `put_destroy/2` evicts that
+  retained entry, freeing its state - useful for bounding memory when many components have been
+  visited (e.g. an LRU policy over conversation panes).
+
+  Only safe for a `cid` that is not currently rendered; if the component is rendered again later
+  it is re-initialized from scratch. Recording a destroy for a `cid` that is not registered is a
+  no-op.
+  """
+  @spec put_destroy(Component.t(), String.t()) :: Component.t()
+  def put_destroy(%Component{} = component, cid) do
+    %{component | next_destroy: cid}
   end
 
   @doc """

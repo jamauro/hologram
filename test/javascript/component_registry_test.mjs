@@ -102,6 +102,32 @@ describe("ComponentRegistry", () => {
     assert.deepStrictEqual(ComponentRegistry.entries, Type.map());
   });
 
+  describe("deleteEntry()", () => {
+    it("removes the entry and returns true when the cid is registered", () => {
+      const result = ComponentRegistry.deleteEntry(cid1);
+
+      assert.isTrue(result);
+      assert.isFalse(ComponentRegistry.isCidRegistered(cid1));
+      assert.deepStrictEqual(
+        ComponentRegistry.entries,
+        Type.map([[cid2, entry2]]),
+      );
+    });
+
+    it("returns false and leaves the registry unchanged when the cid is not registered", () => {
+      const result = ComponentRegistry.deleteEntry(cid3);
+
+      assert.isFalse(result);
+      assert.deepStrictEqual(
+        ComponentRegistry.entries,
+        Type.map([
+          [cid1, entry1],
+          [cid2, entry2],
+        ]),
+      );
+    });
+  });
+
   describe("clearNextAction()", () => {
     it("clears next_action from the component struct in the registry", () => {
       const action = Type.actionStruct({
