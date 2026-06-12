@@ -457,6 +457,20 @@ defmodule Hologram.ComponentTest do
     end
   end
 
+  describe "put_destroy/2" do
+    test "records the cid to destroy" do
+      result = put_destroy(%Component{}, "my_cid")
+
+      assert result == %Component{next_destroy: "my_cid"}
+    end
+
+    test "overwrites a previously recorded cid" do
+      result = put_destroy(%Component{next_destroy: "old_cid"}, "new_cid")
+
+      assert result == %Component{next_destroy: "new_cid"}
+    end
+  end
+
   test "put_context/3" do
     component = %Component{emitted_context: %{a: 1}}
 

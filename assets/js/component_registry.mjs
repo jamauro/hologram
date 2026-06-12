@@ -9,6 +9,20 @@ export default class ComponentRegistry {
     ComponentRegistry.entries = Type.map();
   }
 
+  // Removes a component's entry from the registry, freeing its retained state.
+  // Returns true if an entry was removed, false if the cid was not registered.
+  // Safe only for a cid that is not currently rendered; a later re-render re-inits it.
+  static deleteEntry(cid) {
+    const key = Type.encodeMapKey(cid);
+
+    if (key in ComponentRegistry.entries.data) {
+      delete ComponentRegistry.entries.data[key];
+      return true;
+    }
+
+    return false;
+  }
+
   // Optimized (mutates next_action field in-place)
   static clearNextAction(cid) {
     const entry = ComponentRegistry.entries.data[Type.encodeMapKey(cid)][1];

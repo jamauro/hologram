@@ -360,6 +360,7 @@ describe("Type", () => {
           [Type.atom("next_action"), Type.nil()],
           [Type.atom("next_command"), Type.nil()],
           [Type.atom("next_page"), Type.nil()],
+          [Type.atom("next_destroy"), Type.nil()],
           [Type.atom("state"), Type.map()],
         ]),
       );
@@ -383,6 +384,8 @@ describe("Type", () => {
         ]),
       ]);
 
+      const nextDestroy = Type.bitstring("my_cid");
+
       const state = Type.map([
         [Type.atom("c"), Type.integer(3)],
         [Type.atom("d"), Type.integer(4)],
@@ -393,6 +396,7 @@ describe("Type", () => {
         nextAction,
         nextCommand,
         nextPage,
+        nextDestroy,
         state,
       });
 
@@ -404,6 +408,7 @@ describe("Type", () => {
           [Type.atom("next_action"), nextAction],
           [Type.atom("next_command"), nextCommand],
           [Type.atom("next_page"), nextPage],
+          [Type.atom("next_destroy"), nextDestroy],
           [Type.atom("state"), state],
         ]),
       );
@@ -1682,6 +1687,7 @@ describe("Type", () => {
           [Type.atom("next_action"), Type.nil()],
           [Type.atom("next_command"), Type.nil()],
           [Type.atom("next_page"), Type.nil()],
+          [Type.atom("next_destroy"), Type.nil()],
           [Type.atom("state"), Type.map()],
         ]),
       );
