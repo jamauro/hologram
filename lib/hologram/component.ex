@@ -12,6 +12,7 @@ defmodule Hologram.Component do
             next_command: nil,
             next_page: nil,
             next_destroy: nil,
+            next_preloads: [],
             state: %{}
 
   defmodule Action do
@@ -37,6 +38,7 @@ defmodule Hologram.Component do
           next_command: Command.t() | nil,
           next_page: module | {module, keyword},
           next_destroy: String.t() | nil,
+          next_preloads: [%{cid: String.t(), module: module, props: %{atom => any}}],
           state: %{atom => any}
         }
 
@@ -85,6 +87,8 @@ defmodule Hologram.Component do
       put_destroy: 2,
       put_page: 2,
       put_page: 3,
+      put_preload: 3,
+      put_preload: 4,
       put_state: 2,
       put_state: 3,
       put_subscription: 2
@@ -385,6 +389,26 @@ defmodule Hologram.Component do
   @spec put_page(Component.t(), module, keyword) :: Component.t()
   def put_page(component, page_module, params) do
     %{component | next_page: {page_module, params}}
+  end
+
+  @doc """
+  Records a request to preload (warm) a stateful component off-DOM after the current action
+  finishes executing.
+
+  Preloading runs the component's `init` (and any load it fires) under `cid`, registering it in the
+  client-side registry **without rendering it**. When the component is later actually rendered for
+  the first time, its state and data are already warm, so the first open is instant. `cid` is passed
+  to `init` as the `:cid` prop (exactly as for a normal render), so an entity-bound component derives
+  its data from its own cid and needs no extra props; `props` (default `%{}`) supplies anything else.
+
+  The preloaded component inherits context from the component that preloads it - it resolves
+  `from_context` props as if it were rendered, right then, as a child of the preloader.
+
+  Accumulates: a single action may preload several components (e.g. predictive warming).
+  """
+  @spec put_preload(Component.t(), module, String.t(), map) :: Component.t()
+  def put_preload(%Component{} = component, module, cid, props \\ %{}) do
+    %{component | next_preloads: [%{cid: cid, module: module, props: props} | component.next_preloads]}
   end
 
   @doc """

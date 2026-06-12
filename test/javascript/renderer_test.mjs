@@ -5119,7 +5119,7 @@ describe("Renderer", () => {
       assert.deepStrictEqual(resultVDom, expectedVdom);
 
       const expectedComponentRegistryEntries = Type.map([
-        [cid, componentRegistryEntryFixture()],
+        [cid, componentRegistryEntryFixture({context: Type.map()})],
       ]);
 
       assert.deepStrictEqual(
@@ -5178,7 +5178,7 @@ describe("Renderer", () => {
       assert.deepStrictEqual(resultVDom, expectedVdom);
 
       const expectedComponentRegistryEntries = Type.map([
-        [cid, componentRegistryEntryFixture()],
+        [cid, componentRegistryEntryFixture({context: Type.map()})],
       ]);
 
       assert.deepStrictEqual(
@@ -5266,6 +5266,7 @@ describe("Renderer", () => {
             cid,
             componentRegistryEntryFixture({
               module: module,
+              context: Type.map(),
               state: Type.map([
                 [Type.atom("a"), Type.integer(11)],
                 [Type.atom("b"), Type.integer(22)],

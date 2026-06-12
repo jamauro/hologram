@@ -1074,6 +1074,33 @@ export default class Hologram {
       ComponentRegistry.deleteEntry(nextDestroy);
     }
 
+    const nextPreloads = Erlang_Maps["get/2"](
+      Type.atom("next_preloads"),
+      resultComponentStruct,
+    );
+
+    if (Type.isList(nextPreloads) && nextPreloads.data.length > 0) {
+      // The preloaded components inherit the preloader's (the acting component's) context.
+      const preloaderContext = ComponentRegistry.getComponentContext(target);
+
+      // put_preload prepends, so reverse to preload in call order.
+      for (const spec of [...nextPreloads.data].reverse()) {
+        const moduleProxy = Interpreter.moduleProxy(
+          Erlang_Maps["get/2"](Type.atom("module"), spec),
+        );
+
+        if (moduleProxy) {
+          const props = Erlang_Maps["put/3"](
+            Type.atom("cid"),
+            Erlang_Maps["get/2"](Type.atom("cid"), spec),
+            Erlang_Maps["get/2"](Type.atom("props"), spec),
+          );
+
+          Renderer.preloadComponent(moduleProxy, props, preloaderContext);
+        }
+      }
+    }
+
     let savedComponentStruct = Erlang_Maps["put/3"](
       Type.atom("next_action"),
       Type.nil(),
@@ -1089,6 +1116,12 @@ export default class Hologram {
     savedComponentStruct = Erlang_Maps["put/3"](
       Type.atom("next_destroy"),
       Type.nil(),
+      savedComponentStruct,
+    );
+
+    savedComponentStruct = Erlang_Maps["put/3"](
+      Type.atom("next_preloads"),
+      Type.list(),
       savedComponentStruct,
     );
 

@@ -30,6 +30,18 @@ export default class ComponentRegistry {
     componentStruct.data["atom(next_action)"][1] = Type.nil();
   }
 
+  // Returns a component's stored render context (see putComponentContext), or an empty map if the
+  // cid is unregistered or has not rendered yet. The empty-map fallback means an off-DOM preload
+  // simply gets default prop values when no context is available.
+  // Deps: [:maps.get/3]
+  static getComponentContext(cid) {
+    const entry = ComponentRegistry.getEntry(cid);
+
+    return entry
+      ? Erlang_Maps["get/3"](Type.atom("context"), entry, Type.map())
+      : Type.map();
+  }
+
   // null instead of boxed nil is returned by default on purpose, because the function is not used by transpiled code.
   // Deps: [:maps.get/2]
   static getComponentEmittedContext(cid) {
@@ -90,6 +102,15 @@ export default class ComponentRegistry {
     ComponentRegistry.entries.data[Type.encodeMapKey(cid)][1].data[
       "atom(struct)"
     ][1] = componentStruct;
+  }
+
+  // Stores a component's render context (merged received + emitted) on its entry, recorded at
+  // render time so put_preload can warm an off-DOM component with its preloader's context. Mutates
+  // in-place, adding the "context" key if absent (SSR entries start with only module + struct).
+  static putComponentContext(cid, context) {
+    ComponentRegistry.entries.data[Type.encodeMapKey(cid)][1].data[
+      "atom(context)"
+    ] = [Type.atom("context"), context];
   }
 
   // Optimized (mutates entries field in-place)
