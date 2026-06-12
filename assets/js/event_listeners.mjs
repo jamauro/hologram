@@ -177,6 +177,26 @@ export default class EventListeners {
 
     return distance <= threshold;
   }
+
+  // An IntersectionObserver listener for a single element. The key is constant - an element has at
+  // most one intersect observer - so a re-render refreshes it rather than stacking a second. Unlike
+  // $resize, the initial on-observe fire is NOT suppressed: $intersect means "visibility changed",
+  // and an element already in view at mount is a meaningful first observation (lazy-load, infinite
+  // scroll). Every observation dispatches its IntersectionObserverEntry.
+  static intersectionObserver(element) {
+    return {
+      key: "intersection-observer",
+      attach: (dispatcher) => {
+        const observer = new IntersectionObserver((entries) => {
+          dispatcher(entries[0]);
+        });
+
+        observer.observe(element);
+
+        return () => observer.disconnect();
+      },
+    };
+  }
 }
 
 const $ = EventListeners;

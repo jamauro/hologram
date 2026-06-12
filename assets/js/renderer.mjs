@@ -108,6 +108,7 @@ export default class Renderer {
     Renderer.listenerBindings = [];
     Renderer.reachBindings = [];
     Renderer.resizeBindings = [];
+    Renderer.intersectBindings = [];
 
     const pageModuleProxy = Interpreter.moduleProxy(pageModule);
 
@@ -183,6 +184,21 @@ export default class Renderer {
 
         return {target: element, key, attach, handler};
       });
+  }
+
+  // Deferred intersect (IntersectionObserver) bindings, collected like resize bindings: an element's
+  // observer target is its live DOM node, set on the vnode only during patch, so each binding is
+  // held here until resolveIntersectBindings turns it into a registry binding once `.elm` exists.
+  static intersectBindings = [];
+
+  // Resolves this render's deferred intersect bindings into registry bindings, called after patch.
+  static resolveIntersectBindings() {
+    return $.intersectBindings.map(({vnode, handler}) => {
+      const element = vnode.elm;
+      const {key, attach} = EventListeners.intersectionObserver(element);
+
+      return {target: element, key, attach, handler};
+    });
   }
 
   static toBitstring(term) {
@@ -293,6 +309,14 @@ export default class Renderer {
     // map, where the browser would never fire it. A <window> binding (tagName null) keeps flowing
     // through here onto the native resize DOM event.
     if (originalEventName === "resize" && tagName !== null) {
+      return null;
+    }
+
+    // intersect is delivered by an IntersectionObserver, not a DOM event - it is collected as an
+    // observer binding in #renderElement, so it never rides the element's "on" map. It is
+    // element-only (an element intersects a root; window/document have no such observer), so
+    // unlike resize there is no pass-through case.
+    if (originalEventName === "intersect") {
       return null;
     }
 
@@ -589,6 +613,28 @@ export default class Renderer {
         slotKey: attrIndex,
         once: $.#onceFromModifiers(attrDom.data[2]),
       });
+    });
+  }
+
+  // Records each $intersect attribute on the element as a deferred IntersectionObserver binding —
+  // the intersect analogue of #collectResizeBindings. The handler keys its debounce/throttle window
+  // on the entry's target (the observed element), as an IntersectionObserverEntry has no
+  // currentTarget. The Hologram event type is "intersect".
+  static #collectIntersectBindings(attrsDom, elementVnode, defaultTarget) {
+    attrsDom.data.forEach((attrDom, attrIndex) => {
+      if (Bitstring.toText(attrDom.data[0]) !== "$intersect") {
+        return;
+      }
+
+      const handler = $.#buildEventHandler(
+        attrDom,
+        attrIndex,
+        "intersect",
+        defaultTarget,
+        (event) => event.target,
+      );
+
+      $.intersectBindings.push({vnode: elementVnode, handler});
     });
   }
 
@@ -1273,6 +1319,7 @@ export default class Renderer {
     Renderer.#collectReachBindings(attrsDom, elementVnode, defaultTarget);
 
     Renderer.#collectResizeBindings(attrsDom, elementVnode, defaultTarget);
+    Renderer.#collectIntersectBindings(attrsDom, elementVnode, defaultTarget);
 
     return elementVnode;
   }
