@@ -6375,6 +6375,7 @@ describe("Renderer", () => {
             cid,
             componentRegistryEntryFixture({
               module: module,
+              context: Type.map(),
               state: Type.map([
                 [Type.atom("a"), Type.integer(11)],
                 [Type.atom("b"), Type.integer(22)],

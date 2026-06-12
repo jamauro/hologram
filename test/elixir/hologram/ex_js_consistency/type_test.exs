@@ -28,6 +28,7 @@ defmodule Hologram.ExJsConsistency.TypeTest do
              next_command: nil,
              next_page: nil,
              next_destroy: nil,
+             next_preloads: [],
              state: %{}
            }
   end

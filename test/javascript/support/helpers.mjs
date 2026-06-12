@@ -290,16 +290,27 @@ export function buildWithClauseErrorMsg(arg) {
 }
 
 export function componentRegistryEntryFixture(data = {}) {
-  let {module} = data;
+  let {module, context} = data;
 
   if (typeof module === "undefined") {
     module = Type.alias("MyModule");
   }
 
-  return Type.map([
+  const entry = Type.map([
     [Type.atom("module"), module],
     [Type.atom("struct"), Type.componentStruct(data)],
   ]);
+
+  // A rendered entry also carries the component's recorded context (see
+  // ComponentRegistry.putComponentContext); pass `context` to assert against a post-render entry.
+  if (typeof context !== "undefined") {
+    entry.data[Type.encodeMapKey(Type.atom("context"))] = [
+      Type.atom("context"),
+      context,
+    ];
+  }
+
+  return entry;
 }
 
 export function contextFixture(data = {}) {

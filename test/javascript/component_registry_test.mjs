@@ -168,6 +168,43 @@ describe("ComponentRegistry", () => {
     });
   });
 
+  describe("putComponentContext() / getComponentContext()", () => {
+    const context = Type.map([[Type.atom("scope"), Type.bitstring("acme")]]);
+
+    it("round-trips a context stored on the entry", () => {
+      ComponentRegistry.putComponentContext(cid1, context);
+
+      assert.deepStrictEqual(
+        ComponentRegistry.getComponentContext(cid1),
+        context,
+      );
+    });
+
+    it("returns an empty map when the entry has no stored context", () => {
+      assert.deepStrictEqual(
+        ComponentRegistry.getComponentContext(cid2),
+        Type.map(),
+      );
+    });
+
+    it("returns an empty map when the cid is not registered", () => {
+      assert.deepStrictEqual(
+        ComponentRegistry.getComponentContext(cid3),
+        Type.map(),
+      );
+    });
+
+    it("frees the context together with the entry on deleteEntry", () => {
+      ComponentRegistry.putComponentContext(cid1, context);
+      ComponentRegistry.deleteEntry(cid1);
+
+      assert.deepStrictEqual(
+        ComponentRegistry.getComponentContext(cid1),
+        Type.map(),
+      );
+    });
+  });
+
   describe("getComponentModule()", () => {
     it("entry exists", () => {
       const result = ComponentRegistry.getComponentModule(cid2);
