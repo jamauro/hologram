@@ -6,6 +6,7 @@ import Bitstring from "./bitstring.mjs";
 import Client from "./client.mjs";
 import ComponentRegistry from "./component_registry.mjs";
 import Config from "./config.mjs";
+import Connection from "./connection.mjs";
 import Deserializer from "./deserializer.mjs";
 import ERTS from "./erts.mjs";
 import EventListenerRegistry from "./event_listener_registry.mjs";
@@ -1077,6 +1078,14 @@ export default class Hologram {
 
     if (!Type.isNil(nextDestroy)) {
       ComponentRegistry.deleteEntry(nextDestroy);
+      // PATCH: tell the server to drop this cid's channel subscriptions (fire-and-forget, no reply).
+      Connection.sendMessage(
+        "destroy",
+        Type.map([
+          [Type.atom("instance_id"), Type.bitstring(App.instanceId)],
+          [Type.atom("cid"), nextDestroy],
+        ]),
+      );
     }
 
     const nextPreloads = Erlang_Maps["get/2"](
