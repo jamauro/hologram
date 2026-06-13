@@ -7,6 +7,7 @@ defmodule Hologram.Runtime.Connection do
   @behaviour WebSock
 
   alias Hologram.Assets.PageDigestRegistry
+  alias Hologram.Realtime.SubscriptionRegistry
   alias Hologram.Router.Helpers, as: RouterHelpers
   alias Hologram.Runtime.Deserializer
 
@@ -35,10 +36,16 @@ defmodule Hologram.Runtime.Connection do
   def handle_in({message, [opcode: :text]}, state) do
     {message_type, message_payload, correlation_id} = decode(message)
 
-    {reply_type, reply_payload, new_state} = handle_message(message_type, message_payload, state)
-    reply = encode(reply_type, reply_payload, correlation_id)
+    case handle_message(message_type, message_payload, state) do
+      # Fire-and-forget messages (e.g. "destroy") return no reply — the client's handleMessage
+      # mishandles an un-correlated reply, so we send nothing back.
+      {:noreply, new_state} ->
+        {:ok, new_state}
 
-    {:reply, :ok, {:text, reply}, new_state}
+      {reply_type, reply_payload, new_state} ->
+        reply = encode(reply_type, reply_payload, correlation_id)
+        {:reply, :ok, {:text, reply}, new_state}
+    end
   end
 
   @impl WebSock
@@ -70,6 +77,10 @@ defmodule Hologram.Runtime.Connection do
     case Jason.decode!(message) do
       [type, payload, correlation_id] ->
         {type, Deserializer.deserialize(payload), correlation_id}
+
+      # PATCH: fire-and-forget message with a payload but no correlation id (e.g. "destroy").
+      [type, payload] ->
+        {type, Deserializer.deserialize(payload), nil}
 
       type ->
         {type, nil, nil}
@@ -105,5 +116,21 @@ defmodule Hologram.Runtime.Connection do
 
   defp handle_message("ping", nil, connection_state) do
     {"pong", :__no_payload__, connection_state}
+  end
+
+  # PATCH (put_destroy purge): drop every channel subscription a destroyed component held, so the
+  # server stops routing broadcasts to a dead cid. Fired by the client from `deleteEntry`. See
+  # vendor/hologram-patch.md.
+  defp handle_message("destroy", %{instance_id: instance_id, cid: cid}, connection_state) do
+    case SubscriptionRegistry.bindings_of(instance_id) do
+      nil ->
+        :ok
+
+      bindings ->
+        drops = bindings |> Map.keys() |> Enum.filter(fn {_channel, c} -> c == cid end)
+        if drops != [], do: SubscriptionRegistry.apply_deltas(instance_id, [], drops, nil)
+    end
+
+    {:noreply, connection_state}
   end
 end
