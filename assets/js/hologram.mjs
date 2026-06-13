@@ -128,6 +128,16 @@ export default class Hologram {
     const target = Erlang_Maps["get/2"](Type.atom("target"), action);
 
     const componentModule = ComponentRegistry.getComponentModule(target);
+
+    // PATCH: a delayed action (e.g. Holo.Optimistic's fail-timeout) can fire after its target
+    // component was destroyed — scheduleAction's setTimeout is not cancelled by put_destroy. The
+    // cid no longer resolves, so dispatching would raise inside the timer callback; skip it instead
+    // (an action targeting a gone component is a no-op).
+    if (componentModule === null) {
+      globalThis.Hologram.isProfilingEnabled = false;
+      return;
+    }
+
     const componentStruct = ComponentRegistry.getComponentStruct(target);
     const args = [name, params, componentStruct];
 
