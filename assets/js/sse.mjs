@@ -76,6 +76,28 @@ export default class Sse {
 
       App.subscriptionReceiptRegistry.merge(refreshed, Type.list());
 
+      // Resume signal. On a *reconnect* (receipts already existed before this handshake),
+      // the realtime stream is back after a gap, so each re-subscribed component may have
+      // missed broadcasts while disconnected — dispatch a `resumed` action to it so it can
+      // catch up. A first connect (preHandshakeReceiptCount === 0) has nothing to resume.
+      // Receipts are `[channel, cid, token]`; the dispatcher is the symmetric partner to
+      // `put_subscription` — the framework knows exactly who to notify.
+      if (preHandshakeReceiptCount > 0) {
+        for (const receipt of refreshed.data) {
+          const cid = receipt.data[1];
+
+          if (ComponentRegistry.isCidRegistered(cid)) {
+            Hologram.scheduleAction(
+              Type.actionStruct({
+                name: Type.atom("resumed"),
+                params: Type.map(),
+                target: cid,
+              }),
+            );
+          }
+        }
+      }
+
       const params = new URLSearchParams({
         instance_id: App.instanceId,
         handshake_id: handshakeId,
