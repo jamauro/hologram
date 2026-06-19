@@ -1,9 +1,9 @@
-defmodule HologramFeatureTests.Preload.Page1 do
+defmodule HologramFeatureTests.Warm.Page1 do
   use Hologram.Page
 
-  alias HologramFeatureTests.Components.Preload.Host
+  alias HologramFeatureTests.Components.Warm.Host
 
-  route "/preload/1"
+  route "/warm/1"
 
   layout HologramFeatureTests.Components.DefaultLayout
 

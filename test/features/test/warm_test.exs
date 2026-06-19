@@ -1,21 +1,21 @@
-defmodule HologramFeatureTests.PreloadTest do
+defmodule HologramFeatureTests.WarmTest do
   use HologramFeatureTests.TestCase, async: true
 
-  alias HologramFeatureTests.Preload.Page1
+  alias HologramFeatureTests.Warm.Page1
 
-  # The Host component emits context and preloads/destroys the WarmedComponent. WarmedComponent, on
+  # The Host component emits context and warms/destroys the WarmedComponent. WarmedComponent, on
   # init, forwards the scope it saw to the host's init_log - so init_log records every time the
   # component's init ran, and which context it inherited each time (even while it is off-DOM).
 
-  feature "put_preload warms a component off-DOM, inheriting the preloader's context", %{
+  feature "put_warm warms a component off-DOM, inheriting the warmer's context", %{
     session: session
   } do
     session
     |> visit(Page1)
     |> assert_text(css("#init_log"), ~r/\[\]/)
-    # Preload: the component inits off-DOM (it is never rendered yet - #warmed is absent), and its
+    # Warm: the component inits off-DOM (it is never rendered yet - #warmed is absent), and its
     # init inherits the host's context, so init_log records the host's scope, not the prop default.
-    |> click(css("button[id='preload']"))
+    |> click(css("button[id='warm']"))
     |> assert_text(css("#init_log"), ~r/\["scope-from-host"\]/)
     |> refute_has(css("#warmed"))
     # Show: it renders, but init is NOT run again (init_log still has a single entry), and it
@@ -30,7 +30,7 @@ defmodule HologramFeatureTests.PreloadTest do
   } do
     session
     |> visit(Page1)
-    |> click(css("button[id='preload']"))
+    |> click(css("button[id='warm']"))
     |> click(css("button[id='show']"))
     |> assert_text(css("#warmed_scope"), "scope-from-host")
     # Un-render then render again: the component is retained, so init does NOT run again - init_log

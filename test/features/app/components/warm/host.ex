@@ -1,21 +1,21 @@
-defmodule HologramFeatureTests.Components.Preload.Host do
+defmodule HologramFeatureTests.Components.Warm.Host do
   use Hologram.Component
 
   import Hologram.Commons.KernelUtils, only: [inspect: 1]
   import Kernel, except: [inspect: 1]
 
-  alias HologramFeatureTests.Components.Preload.WarmedComponent
+  alias HologramFeatureTests.Components.Warm.WarmedComponent
 
   def init(_props, component, _server) do
     component
-    |> put_context({:preload, :scope}, "scope-from-host")
+    |> put_context({:warm, :scope}, "scope-from-host")
     |> put_state(:show, false)
     |> put_state(:init_log, [])
   end
 
   def template do
     ~HOLO"""
-    <button id="preload" $click="preload">Preload</button>
+    <button id="warm" $click="warm">Warm</button>
     <button id="show" $click="show">Show</button>
     <button id="hide" $click="hide">Hide</button>
     <button id="destroy" $click="destroy">Destroy</button>
@@ -28,8 +28,8 @@ defmodule HologramFeatureTests.Components.Preload.Host do
     """
   end
 
-  def action(:preload, _params, component) do
-    put_preload(component, WarmedComponent, "warmed")
+  def action(:warm, _params, component) do
+    put_warm(component, WarmedComponent, "warmed")
   end
 
   def action(:show, _params, component) do
