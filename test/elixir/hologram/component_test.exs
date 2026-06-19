@@ -489,31 +489,31 @@ defmodule Hologram.ComponentTest do
            }
   end
 
-  describe "put_preload/3 and put_preload/4" do
-    test "records a preload spec with the given module, cid and props" do
-      result = put_preload(%Component{}, MyComponent, "my_cid", %{a: 1})
+  describe "put_warm/3 and put_warm/4" do
+    test "records a warm spec with the given module, cid and props" do
+      result = put_warm(%Component{}, MyComponent, "my_cid", %{a: 1})
 
       assert result == %Component{
-               next_preloads: [%{cid: "my_cid", module: MyComponent, props: %{a: 1}}]
+               next_warms: [%{cid: "my_cid", module: MyComponent, props: %{a: 1}}]
              }
     end
 
     test "defaults props to an empty map" do
-      result = put_preload(%Component{}, MyComponent, "my_cid")
+      result = put_warm(%Component{}, MyComponent, "my_cid")
 
       assert result == %Component{
-               next_preloads: [%{cid: "my_cid", module: MyComponent, props: %{}}]
+               next_warms: [%{cid: "my_cid", module: MyComponent, props: %{}}]
              }
     end
 
     test "accumulates, prepending so later calls come first" do
       result =
         %Component{}
-        |> put_preload(MyComponent, "cid_1")
-        |> put_preload(MyComponent, "cid_2")
+        |> put_warm(MyComponent, "cid_1")
+        |> put_warm(MyComponent, "cid_2")
 
       assert result == %Component{
-               next_preloads: [
+               next_warms: [
                  %{cid: "cid_2", module: MyComponent, props: %{}},
                  %{cid: "cid_1", module: MyComponent, props: %{}}
                ]

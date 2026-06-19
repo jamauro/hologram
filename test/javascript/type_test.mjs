@@ -361,7 +361,7 @@ describe("Type", () => {
           [Type.atom("next_command"), Type.nil()],
           [Type.atom("next_page"), Type.nil()],
           [Type.atom("next_destroy"), Type.nil()],
-          [Type.atom("next_preloads"), Type.list()],
+          [Type.atom("next_warms"), Type.list()],
           [Type.atom("state"), Type.map()],
         ]),
       );
@@ -387,7 +387,7 @@ describe("Type", () => {
 
       const nextDestroy = Type.bitstring("my_cid");
 
-      const nextPreloads = Type.list([
+      const nextWarms = Type.list([
         Type.map([
           [Type.atom("cid"), Type.bitstring("my_cid")],
           [Type.atom("module"), Type.alias("MyComponent")],
@@ -406,7 +406,7 @@ describe("Type", () => {
         nextCommand,
         nextPage,
         nextDestroy,
-        nextPreloads,
+        nextWarms,
         state,
       });
 
@@ -419,7 +419,7 @@ describe("Type", () => {
           [Type.atom("next_command"), nextCommand],
           [Type.atom("next_page"), nextPage],
           [Type.atom("next_destroy"), nextDestroy],
-          [Type.atom("next_preloads"), nextPreloads],
+          [Type.atom("next_warms"), nextWarms],
           [Type.atom("state"), state],
         ]),
       );
@@ -1699,7 +1699,7 @@ describe("Type", () => {
           [Type.atom("next_command"), Type.nil()],
           [Type.atom("next_page"), Type.nil()],
           [Type.atom("next_destroy"), Type.nil()],
-          [Type.atom("next_preloads"), Type.list()],
+          [Type.atom("next_warms"), Type.list()],
           [Type.atom("state"), Type.map()],
         ]),
       );

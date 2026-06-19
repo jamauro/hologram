@@ -31,7 +31,7 @@ export default class ComponentRegistry {
   }
 
   // Returns a component's stored render context (see putComponentContext), or an empty map if the
-  // cid is unregistered or has not rendered yet. The empty-map fallback means an off-DOM preload
+  // cid is unregistered or has not rendered yet. The empty-map fallback means an off-DOM warm
   // simply gets default prop values when no context is available.
   // Deps: [:maps.get/3]
   static getComponentContext(cid) {
@@ -105,7 +105,7 @@ export default class ComponentRegistry {
   }
 
   // Stores a component's render context (merged received + emitted) on its entry, recorded at
-  // render time so put_preload can warm an off-DOM component with its preloader's context. Mutates
+  // render time so put_warm can warm an off-DOM component with its warmer's context. Mutates
   // in-place, adding the "context" key if absent (SSR entries start with only module + struct).
   static putComponentContext(cid, context) {
     ComponentRegistry.entries.data[Type.encodeMapKey(cid)][1].data[

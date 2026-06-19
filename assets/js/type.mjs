@@ -128,7 +128,7 @@ export default class Type {
       nextCommand,
       nextPage,
       nextDestroy,
-      nextPreloads,
+      nextWarms,
       state,
     } = data;
 
@@ -152,8 +152,8 @@ export default class Type {
       nextDestroy = Type.nil();
     }
 
-    if (typeof nextPreloads === "undefined") {
-      nextPreloads = Type.list();
+    if (typeof nextWarms === "undefined") {
+      nextWarms = Type.list();
     }
 
     if (typeof state === "undefined") {
@@ -166,7 +166,7 @@ export default class Type {
       [Type.atom("next_command"), nextCommand],
       [Type.atom("next_page"), nextPage],
       [Type.atom("next_destroy"), nextDestroy],
-      [Type.atom("next_preloads"), nextPreloads],
+      [Type.atom("next_warms"), nextWarms],
       [Type.atom("state"), state],
     ]);
   }

@@ -1157,17 +1157,17 @@ export default class Hologram {
       );
     }
 
-    const nextPreloads = Erlang_Maps["get/2"](
-      Type.atom("next_preloads"),
+    const nextWarms = Erlang_Maps["get/2"](
+      Type.atom("next_warms"),
       resultComponentStruct,
     );
 
-    if (Type.isList(nextPreloads) && nextPreloads.data.length > 0) {
-      // The preloaded components inherit the preloader's (the acting component's) context.
-      const preloaderContext = ComponentRegistry.getComponentContext(target);
+    if (Type.isList(nextWarms) && nextWarms.data.length > 0) {
+      // The warmed components inherit the warmer's (the acting component's) context.
+      const warmerContext = ComponentRegistry.getComponentContext(target);
 
-      // put_preload prepends, so reverse to preload in call order.
-      for (const spec of [...nextPreloads.data].reverse()) {
+      // put_warm prepends, so reverse to warm in call order.
+      for (const spec of [...nextWarms.data].reverse()) {
         const moduleProxy = Interpreter.moduleProxy(
           Erlang_Maps["get/2"](Type.atom("module"), spec),
         );
@@ -1179,7 +1179,7 @@ export default class Hologram {
             Erlang_Maps["get/2"](Type.atom("props"), spec),
           );
 
-          Renderer.preloadComponent(moduleProxy, props, preloaderContext);
+          Renderer.warmComponent(moduleProxy, props, warmerContext);
         }
       }
     }
@@ -1203,7 +1203,7 @@ export default class Hologram {
     );
 
     savedComponentStruct = Erlang_Maps["put/3"](
-      Type.atom("next_preloads"),
+      Type.atom("next_warms"),
       Type.list(),
       savedComponentStruct,
     );

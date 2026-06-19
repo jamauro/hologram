@@ -1698,7 +1698,7 @@ export default class Renderer {
       componentEmittedContext,
     );
 
-    // Record this component's context so put_preload can warm an off-DOM child with the context it
+    // Record this component's context so put_warm can warm an off-DOM child with the context it
     // would inherit if rendered here (the merged value is already computed for #renderTemplate).
     ComponentRegistry.putComponentContext(cid, mergedContext);
 
@@ -1712,14 +1712,14 @@ export default class Renderer {
     );
   }
 
-  // Preloads (warms) a stateful component off-DOM: runs the SAME init path as
+  // Warms a stateful component off-DOM: runs the SAME init path as
   // #renderStatefulComponent (context-injected props + default props + #maybeInitComponent, which
   // registers the component and queues its init action) but emits no DOM. The queued init action
   // fires via the runtime's normal scheduling pass. Idempotent: a no-op if the cid is already
   // registered (already warm or rendered). `props` must include the `:cid` prop; `context` is the
-  // preloader's context, so the component resolves from_context props exactly as it would if
-  // rendered as the preloader's child.
-  static preloadComponent(moduleProxy, props, context) {
+  // warmer's context, so the component resolves from_context props exactly as it would if
+  // rendered as the warmer's child.
+  static warmComponent(moduleProxy, props, context) {
     const cid = Erlang_Maps["get/2"](Type.atom("cid"), props);
 
     if (ComponentRegistry.isCidRegistered(cid)) {
