@@ -19,6 +19,10 @@ export default class Sse {
 
   static eventSource = null;
   static reconnectAttempts = 0;
+  static reconnectTimer = null;
+  // Last connection status pushed to the UI (deduped) and whether the network observers are armed.
+  static lastStatus = null;
+  static networkListenersInstalled = false;
 
   // Exponential backoff with ±RECONNECT_JITTER noise. Mirrors the established
   // pattern in `Hologram.Connection` so consecutive SSE reconnect failures
@@ -47,6 +51,8 @@ export default class Sse {
   }
 
   static async connect() {
+    $.installNetworkListeners();
+
     try {
       const preHandshakeReceiptCount =
         App.subscriptionReceiptRegistry.entries.size;
@@ -154,7 +160,7 @@ export default class Sse {
 
       $.eventSource.onopen = () => {
         $.reconnectAttempts = 0;
-        GlobalRegistry.set("sseConnected?", true);
+        $.setConnected(true);
       };
 
       // JS-driven reconnect: native EventSource auto-reconnect would re-use
@@ -165,7 +171,7 @@ export default class Sse {
       // "give up and reload" case organically once stored receipts age out.
       $.eventSource.onerror = (event) => {
         Logger.debug(`SSE error: ${event.type}`);
-        GlobalRegistry.set("sseConnected?", false);
+        $.setConnected(false);
         $.eventSource.close();
 
         $.scheduleReconnect();
@@ -176,6 +182,63 @@ export default class Sse {
     }
   }
 
+  // Maintain the SSE-up flag (read elsewhere as the source of truth) and re-derive the UI status.
+  // Called from onopen/onerror.
+  static setConnected(value) {
+    GlobalRegistry.set("sseConnected?", value);
+    $.publishStatus();
+  }
+
+  // Connection status is the PRODUCT of two state machines the browser already runs: device network
+  // reachability (`navigator.onLine`) and the SSE stream (`sseConnected?`). We only observe and
+  // combine them — no polling, no heartbeat watchdog. Offline dominates: a down network makes the
+  // stale stream flag meaningless, and "reconnecting" over no network would be a lie.
+  static currentStatus() {
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return "offline";
+    return GlobalRegistry.get("sseConnected?") === true ? "live" : "reconnecting";
+  }
+
+  // Push the derived status to the layout (always-mounted root, cid "layout") so connection-status
+  // UI rides Hologram's normal render — no out-of-band DOM. Deduped, and only once the layout is
+  // registered (executeAction would no-op an unknown cid anyway). This is the STATUS signal; the
+  // orthogonal data CATCH-UP signal stays a per-subscribed-component `resumed` (see connect()).
+  static publishStatus() {
+    const status = $.currentStatus();
+
+    if (status !== $.lastStatus && ComponentRegistry.isCidRegistered(Type.bitstring("layout"))) {
+      $.lastStatus = status;
+      Hologram.dispatchAction("connection_changed", "layout", {status});
+    }
+  }
+
+  // Observe the device-network state machine. `offline` just re-derives status (→ "offline"). `online`
+  // re-derives AND forces a clean re-handshake of the (possibly zombie) stream, reusing the existing
+  // reconnect path — so missed broadcasts are caught up via `resumed` and status moves offline →
+  // reconnecting → live deterministically, instead of depending on whether the socket happened to
+  // survive. Armed once; guarded for the Node test env.
+  static installNetworkListeners() {
+    if ($.networkListenersInstalled || typeof window === "undefined" ||
+        typeof window.addEventListener !== "function") return;
+    $.networkListenersInstalled = true;
+
+    window.addEventListener("offline", () => $.publishStatus());
+    window.addEventListener("online", () => $.handleOnline());
+  }
+
+  static handleOnline() {
+    if ($.eventSource) {
+      $.eventSource.close();
+      $.eventSource = null;
+    }
+
+    clearTimeout($.reconnectTimer);
+    $.reconnectAttempts = 0;
+    // Mark the stream down first so status shows "reconnecting" (network is back, stream isn't yet),
+    // then re-handshake from scratch.
+    $.setConnected(false);
+    $.scheduleReconnect();
+  }
+
   // Bump the failure counter and re-run the handshake protocol from scratch
   // after an exponential backoff delay. Shared by the handshake-failure paths
   // and the post-open EventSource onerror handler so a failure anywhere in the
@@ -184,7 +247,7 @@ export default class Sse {
     $.reconnectAttempts++;
     const delay = $.computeReconnectDelay($.reconnectAttempts);
 
-    setTimeout(() => $.connect(), delay);
+    $.reconnectTimer = setTimeout(() => $.connect(), delay);
   }
 }
 
