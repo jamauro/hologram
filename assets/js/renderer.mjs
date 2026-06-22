@@ -1370,7 +1370,7 @@ export default class Renderer {
   static #renderNodes(nodes, context, slots, defaultTarget, parentTagName) {
     return Renderer.#mergeNeighbouringTextNodes(
       nodes.data
-        // There may be nil DOM nodes resulting from "if" blocks, e.g. {%if false}abc{/if} or DOCTYPE
+        // Skip nil template nodes (e.g. an untaken {%if false} branch) before rendering.
         .filter((node) => !Type.isNil(node))
         .map((node) =>
           Renderer.renderDom(
@@ -1381,7 +1381,11 @@ export default class Renderer {
             parentTagName,
           ),
         )
-        .flat(),
+        .flat()
+        // Drop nil RENDER RESULTS too: <document>/<window>/DOCTYPE render to nil (they bind events /
+        // mark the doctype but emit no node), so without this they surface as a stray "undefined"
+        // child when nested inside a component — a page absorbs them via its top-level <html> lookup.
+        .filter((rendered) => !Type.isNil(rendered)),
     );
   }
 

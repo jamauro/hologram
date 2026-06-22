@@ -5868,6 +5868,39 @@ describe("Renderer", () => {
       assert.equal(Renderer.listenerBindings[0].key, "bubble:keydown");
       assert.equal(Renderer.listenerBindings[0].target, document);
     });
+
+    it("is filtered out of a sibling list, leaving no stray nil child", () => {
+      // [<document $key_down="my_action" />, "x"] — the document tag renders to nil; without the
+      // nil-result filter in #renderNodes it surfaces as an "undefined" sibling when a component
+      // (not a page) hosts it. The binding is still collected.
+      const documentNode = Type.tuple([
+        Type.atom("element"),
+        Type.bitstring("document"),
+        Type.list([
+          Type.tuple([
+            Type.bitstring("$key_down"),
+            Type.list([
+              Type.tuple([Type.atom("text"), Type.bitstring("my_action")]),
+            ]),
+          ]),
+        ]),
+        Type.list(),
+      ]);
+
+      const textNode = Type.tuple([Type.atom("text"), Type.bitstring("x")]);
+
+      const result = Renderer.renderDom(
+        Type.list([documentNode, textNode]),
+        context,
+        slots,
+        defaultTarget,
+        parentTagName,
+      );
+
+      assert.deepStrictEqual(result, ["x"]);
+      assert.equal(Renderer.listenerBindings.length, 1);
+      assert.equal(Renderer.listenerBindings[0].target, document);
+    });
   });
 
   describe("click_outside binding", () => {
