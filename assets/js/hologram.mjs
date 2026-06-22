@@ -46,6 +46,7 @@ import ScrollEvent from "./events/scroll_event.mjs";
 import SelectEvent from "./events/select_event.mjs";
 import SubmitEvent from "./events/submit_event.mjs";
 import TransitionEvent from "./events/transition_event.mjs";
+import VisibleEvent from "./events/visible_event.mjs";
 
 import ManuallyPortedElixirApplication from "./elixir/application.mjs";
 import ManuallyPortedElixirCldrLocale from "./elixir/cldr/locale.mjs";
@@ -814,6 +815,9 @@ export default class Hologram {
       case "transitionrun":
       case "transitionstart":
         return TransitionEvent;
+
+      case "visibilitychange":
+        return VisibleEvent;
     }
   }
 
