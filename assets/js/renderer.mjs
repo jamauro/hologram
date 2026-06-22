@@ -883,6 +883,12 @@ export default class Renderer {
   }
 
   static #mapEventName(eventName, tagName, attrsVdom) {
+    // $visible is the friendly name for the document's visibilitychange event (used as
+    // <document $visible={...}>); VisibleEvent filters its hidden-direction firings.
+    if (eventName === "visible") {
+      return "visibilitychange";
+    }
+
     if (eventName === "change") {
       if (tagName === "input") {
         const inputType = attrsVdom?.type || "text";
