@@ -5870,9 +5870,9 @@ describe("Renderer", () => {
     });
 
     it("is filtered out of a sibling list, leaving no stray nil child", () => {
-      // [<document $key_down="my_action" />, "x"] — the document tag renders to nil; without the
-      // nil-result filter in #renderNodes it surfaces as an "undefined" sibling when a component
-      // (not a page) hosts it. The binding is still collected.
+      // [<document $key_down="my_action" />, "x"] — the document tag renders to nil; that nil is
+      // dropped in #mergeNeighbouringTextNodes, otherwise it surfaces as an "undefined" sibling when
+      // a component (not a page) hosts it. The binding is still collected.
       const documentNode = Type.tuple([
         Type.atom("element"),
         Type.bitstring("document"),
