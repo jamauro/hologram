@@ -18,6 +18,7 @@ export default class Sse {
   static SSE_PATH = "/hologram/sse";
 
   static eventSource = null;
+  static connectedOnce = false;
   static reconnectAttempts = 0;
   static reconnectTimer = null;
   // Last connection status pushed to the UI (deduped) and whether the network observers are armed.
@@ -82,13 +83,15 @@ export default class Sse {
 
       App.subscriptionReceiptRegistry.merge(refreshed, Type.list());
 
-      // Resume signal. On a *reconnect* (receipts already existed before this handshake),
-      // the realtime stream is back after a gap, so each re-subscribed component may have
-      // missed broadcasts while disconnected — dispatch a `resumed` action to it so it can
-      // catch up. A first connect (preHandshakeReceiptCount === 0) has nothing to resume.
+      // Resume signal. On a *reconnect* (the stream is back after a gap), each re-subscribed
+      // component may have missed broadcasts while disconnected — dispatch a `resumed` action to
+      // it so it can catch up. Gated on `connectedOnce`, NOT on a non-empty receipt set: SSR seeds
+      // subscription receipts before the first handshake ever runs, so a receipt-count proxy mis-
+      // fires `resumed` to every component on the initial load. `connectedOnce` flips only after a
+      // real EventSource open, so the first connect (page load) is never a resume.
       // Receipts are `[channel, cid, token]`; the dispatcher is the symmetric partner to
       // `put_subscription` — the framework knows exactly who to notify.
-      if (preHandshakeReceiptCount > 0) {
+      if ($.connectedOnce && preHandshakeReceiptCount > 0) {
         for (const receipt of refreshed.data) {
           const cid = receipt.data[1];
 
@@ -159,6 +162,7 @@ export default class Sse {
       });
 
       $.eventSource.onopen = () => {
+        $.connectedOnce = true;
         $.reconnectAttempts = 0;
         $.setConnected(true);
       };
