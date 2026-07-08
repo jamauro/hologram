@@ -90,6 +90,18 @@ export default class Hologram {
   // In-memory cache for page snapshots (fastest access)
   static #pageSnapshots = new Map();
 
+  // PATCH (inline-action-cascade) — downstream fork patch; see #processActionResult and executeAction
+  // for the other two hunks tagged the same. Depth of the current synchronous action cascade: a
+  // forwarded delay-0 action runs inline in the same tick so the whole cross-component update paints as
+  // one consistent frame (no intermediate stale-value "flash"). This counter bounds that inline chaining
+  // so a pathological action loop falls back to setTimeout scheduling (yielding to the event loop)
+  // instead of recursing until the tab freezes.
+  // REMOVE this whole patch (all 3 hunks) once upstream coalesces a synchronous cross-component action
+  // cascade into a single render — i.e. runs a delay-0 forwarded action before rendering, or extends
+  // the render-coalescing roadmap item to span the action cascade. Then the naïve
+  // put_state(...) + put_action(target: other) hand-off no longer paints a stale intermediate frame.
+  static #actionCascadeDepth = 0;
+  static #MAX_ACTION_CASCADE_DEPTH = 50;
   static #historyId = null;
   static #isInitiated = false;
   static #pageModule = null;
@@ -155,6 +167,15 @@ export default class Hologram {
     );
 
     if (resultComponentStruct instanceof Promise) {
+      // PATCH (inline-action-cascade) — a synchronous cascade can't extend across an async boundary.
+      // If the caller deferred its paint to chain into this (now-async) forward, flush that deferred
+      // paint now so the accumulated synchronous state is shown; the resolved result renders on its own
+      // when it settles. Remove together with the other two hunks tagged (inline-action-cascade).
+      if (Hologram.#actionCascadeDepth > 0) {
+        Hologram.render();
+        Hologram.#scheduleQueuedInitActions();
+      }
+
       resultComponentStruct.then((resolved) =>
         Hologram.#processActionResult(resolved, name, target, startTime),
       );
@@ -1227,10 +1248,8 @@ export default class Hologram {
       PerformanceTimer.diff(startTime),
     );
 
-    Hologram.render();
-
-    Hologram.#scheduleQueuedInitActions();
-
+    // PATCH (inline-action-cascade) — resolve the forwarded action's target (defaults to the acting
+    // component) and its delay up front, so we can decide whether to chain it INLINE before rendering.
     if (!Type.isNil(nextAction)) {
       if (Type.isNil(Erlang_Maps["get/2"](Type.atom("target"), nextAction))) {
         nextAction = Erlang_Maps["put/3"](
@@ -1239,8 +1258,53 @@ export default class Hologram {
           nextAction,
         );
       }
+    }
 
-      Hologram.scheduleAction(nextAction);
+    const nextActionDelay = Type.isNil(nextAction)
+      ? 0n
+      : Erlang_Maps["get/3"](Type.atom("delay"), nextAction, Type.integer(0))
+          .value;
+
+    // PATCH (inline-action-cascade) — an immediate (delay-0) forwarded action is the cross-component
+    // optimistic hand-off. Running it through scheduleAction (setTimeout) AFTER rendering here would
+    // paint an intermediate frame where THIS component is updated but the forward's target is not yet —
+    // the "flash". Instead, chain it INLINE in this same tick and defer the paint (and the queued-init
+    // scheduling) to the TAIL of the cascade, so every component is consistent in the single frame we
+    // paint. Delayed forwards (delay > 0 — the intentional "async for animations" path) keep scheduling,
+    // as before. The depth cap makes a pathological forward loop fall back to setTimeout rather than
+    // freezing the tab.
+    //
+    // REMOVE this patch when upstream coalesces the cross-component cascade into one render. The
+    // original (pre-patch) body was simply:
+    //     Hologram.render();
+    //     Hologram.#scheduleQueuedInitActions();
+    //     if (!Type.isNil(nextAction)) {
+    //       if (Type.isNil(get(:target, nextAction))) nextAction = put(:target, target, nextAction);
+    //       Hologram.scheduleAction(nextAction);
+    //     }
+    //     if (!Type.isNil(nextPage)) $.#navigateToPage(nextPage);
+    const chainInline =
+      !Type.isNil(nextAction) &&
+      nextActionDelay === 0n &&
+      Hologram.#actionCascadeDepth < Hologram.#MAX_ACTION_CASCADE_DEPTH;
+
+    if (!chainInline) {
+      Hologram.render();
+      Hologram.#scheduleQueuedInitActions();
+    }
+
+    if (!Type.isNil(nextAction)) {
+      if (chainInline) {
+        Hologram.#actionCascadeDepth++;
+
+        try {
+          Hologram.executeAction(nextAction);
+        } finally {
+          Hologram.#actionCascadeDepth--;
+        }
+      } else {
+        Hologram.scheduleAction(nextAction);
+      }
     }
 
     if (!Type.isNil(nextPage)) {
