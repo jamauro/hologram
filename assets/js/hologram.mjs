@@ -807,6 +807,8 @@ export default class Hologram {
 
       case "pointercancel":
       case "pointerdown":
+      case "pointerenter":
+      case "pointerleave":
       case "pointermove":
       case "pointerup":
         return PointerEvent;
