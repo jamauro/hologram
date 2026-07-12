@@ -63,8 +63,6 @@ import ManuallyPortedElixirStringTokenizer from "./elixir/string/tokenizer.mjs";
 import ManuallyPortedElixirTask from "./elixir/task.mjs";
 import ManuallyPortedElixirURI from "./elixir/uri.mjs";
 
-import {toVNode} from "./vendor/snabbdom/build/index.js";
-
 // TODO: test
 export default class Hologram {
   static #ETS_STORAGE_KEY = "hologram_ets";
@@ -984,7 +982,19 @@ export default class Hologram {
 
     Hologram.#defineManuallyPortedFunctions();
 
-    Hologram.virtualDocument = toVNode(document.documentElement);
+    // PATCH (hydration-adopt) — downstream fork patch; see Vdom.fromLiveDom.
+    // Seed the boot vdom in the renderer's vnode shape, bound to the live DOM, so the first
+    // patch ADOPTS the SSR-rendered nodes instead of rebuilding the page (snabbdom's toVNode
+    // encoded id/class into `sel`, failing sameVnode for every classed element — the whole
+    // SSR paint was discarded and every <img> refetched/re-decoded on refresh). fromLiveDom
+    // carries the link/script keys itself, so addKeysToLinkAndScriptVnodes is not needed.
+    Hologram.virtualDocument = Vdom.fromLiveDom(document.documentElement);
+
+    // TRIAL RESOLUTION (needs review): the adopted seed still has to pick up the block-marker
+    // keys and fragment grouping that #985 added, or the boot patch diffs a flat old tree
+    // against a fragmented new one. fromLiveDom already stamps the link/script keys, so this
+    // pass only re-derives them; the open question is the fragment wrapper, which carries no
+    // `elm` of its own.
     Vdom.addKeysToVnodes(Hologram.virtualDocument);
 
     console.inspect = (term) => console.log(Interpreter.inspect(term));
