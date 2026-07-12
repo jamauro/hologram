@@ -403,4 +403,95 @@ describe("Vdom", () => {
       });
     });
   });
+
+  describe("fromLiveDom()", () => {
+    // The hydration seed (see hologram.mjs #onReady): the renderer's vnode shape — bare-tag
+    // sel, id/class as plain attrs — bound to the live DOM node. toVNode's "img.my-class"
+    // sels failed sameVnode() against the renderer's bare tags, so hydration rebuilt the page.
+
+    it("element with class and id: bare-tag sel, id/class in attrs, elm bound", () => {
+      const el = document.createElement("img");
+      el.id = "my-id";
+      el.className = "a b";
+      el.setAttribute("src", "/files/1");
+
+      const result = Vdom.fromLiveDom(el);
+
+      assert.equal(result.sel, "img");
+      assert.deepStrictEqual(result.data.attrs, {
+        id: "my-id",
+        class: "a b",
+        src: "/files/1",
+      });
+      assert.equal(result.elm, el);
+    });
+
+    it("data-* attributes stay plain attrs (the attributes module diffs them)", () => {
+      const el = document.createElement("div");
+      el.setAttribute("data-theme", "aurora");
+
+      const result = Vdom.fromLiveDom(el);
+
+      assert.deepStrictEqual(result.data.attrs, {"data-theme": "aurora"});
+    });
+
+    it("empty-valued attribute becomes true (the renderer's boolean-attr shape)", () => {
+      const el = document.createElement("input");
+      el.setAttribute("hidden", "");
+
+      const result = Vdom.fromLiveDom(el);
+
+      assert.deepStrictEqual(result.data.attrs, {hidden: true});
+    });
+
+    it("text child: a text VNODE (elm-bound), not a bare string", () => {
+      const el = document.createElement("span");
+      el.textContent = "my_text";
+
+      const result = Vdom.fromLiveDom(el);
+
+      assert.equal(result.children.length, 1);
+      assert.equal(result.children[0].sel, undefined);
+      assert.equal(result.children[0].text, "my_text");
+      assert.equal(result.children[0].elm, el.firstChild);
+    });
+
+    it("comment child", () => {
+      const el = document.createElement("div");
+      el.appendChild(document.createComment("my_comment"));
+
+      const result = Vdom.fromLiveDom(el);
+
+      assert.equal(result.children[0].sel, "!");
+      assert.equal(result.children[0].text, "my_comment");
+    });
+
+    it("link element gets the stylesheet key (vnode.key AND data.key)", () => {
+      const el = document.createElement("link");
+      el.setAttribute("href", "/assets/app.css");
+
+      const result = Vdom.fromLiveDom(el);
+
+      assert.equal(result.key, "__hologramLink__:/assets/app.css");
+      assert.equal(result.data.key, "__hologramLink__:/assets/app.css");
+    });
+
+    it("script element with src gets the script key", () => {
+      const el = document.createElement("script");
+      el.setAttribute("src", "/hologram/runtime.js");
+
+      const result = Vdom.fromLiveDom(el);
+
+      assert.equal(result.key, "__hologramScript__:/hologram/runtime.js");
+    });
+
+    it("inline script keyed by its code", () => {
+      const el = document.createElement("script");
+      el.textContent = "const x = 123;";
+
+      const result = Vdom.fromLiveDom(el);
+
+      assert.equal(result.key, "__hologramScript__:const x = 123;");
+    });
+  });
 });

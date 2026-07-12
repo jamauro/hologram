@@ -5,11 +5,69 @@ import {
   eventListenersModule,
   h as vnode,
   init,
+  vnode as rawVnode,
 } from "snabbdom";
 
 const patch = init([attributesModule, eventListenersModule]);
 
 export default class Vdom {
+  // PATCH (hydration-adopt) — downstream fork patch; see hologram.mjs #onReady.
+  //
+  // The boot-time hydration seed: the LIVE document as a vnode tree in the RENDERER's shape —
+  // bare-tag sels, ALL attributes (id/class/data-* included) in `data.attrs`, link/script keys —
+  // with every vnode bound to its real DOM node (`elm`), so the first patch ADOPTS the
+  // server-rendered nodes instead of rebuilding them.
+  //
+  // snabbdom's `toVNode` was used here before, but it encodes id/class into `sel`
+  // ("img.msg-att-img") and data-* into `data.dataset`, while the renderer emits bare tags
+  // ("img") with everything in attrs. `sameVnode()` compares `sel` strictly, so every classed
+  // element failed the match and the whole page was recreated on boot: the SSR paint was
+  // discarded, every <img> refetched + re-decoded (a visible blink on refresh), all for a
+  // "hydration" that was designed to be a near-no-op. This is `#buildVnodeFromDomNode`'s shape
+  // (the navigation-side builder) plus the `elm` binding only a live tree can carry.
+  static fromLiveDom(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      // A text VNODE (not a bare string, which only `h()` normalizes) — the old side of a
+      // patch must be real vnodes carrying `elm`.
+      return rawVnode(undefined, undefined, undefined, node.textContent, node);
+    }
+
+    if (node.nodeType === Node.COMMENT_NODE) {
+      return rawVnode("!", {}, [], node.textContent, node);
+    }
+
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return rawVnode("", {}, [], undefined, node);
+    }
+
+    const attrs = {};
+
+    for (const attr of node.attributes) {
+      attrs[attr.name] = attr.value === "" ? true : attr.value;
+    }
+
+    const tagName = node.tagName.toLowerCase();
+    const data = {attrs: attrs};
+
+    // The same link/script keys the renderer stamps (and addKeysToLinkAndScriptVnodes used to
+    // graft onto the toVNode seed): a stylesheet/script only ever counts as "the same element"
+    // as itself, so hydration can't accidentally re-execute or reload one.
+    if (tagName === "link" && typeof attrs.href === "string") {
+      data.key = `__hologramLink__:${attrs.href}`;
+    } else if (
+      tagName === "script" &&
+      typeof attrs.src === "string" &&
+      attrs.src
+    ) {
+      data.key = `__hologramScript__:${attrs.src}`;
+    } else if (tagName === "script" && node.textContent) {
+      data.key = `__hologramScript__:${node.textContent}`;
+    }
+
+    const children = Array.from(node.childNodes).map(Vdom.fromLiveDom);
+
+    return rawVnode(tagName, data, children, undefined, node);
+  }
   static addKeysToLinkAndScriptVnodes(node) {
     let key;
 

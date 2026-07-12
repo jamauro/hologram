@@ -58,8 +58,6 @@ import ManuallyPortedElixirString from "./elixir/string.mjs";
 import ManuallyPortedElixirTask from "./elixir/task.mjs";
 import ManuallyPortedElixirURI from "./elixir/uri.mjs";
 
-import {toVNode} from "snabbdom";
-
 // TODO: test
 export default class Hologram {
   static #ETS_STORAGE_KEY = "hologram_ets";
@@ -933,8 +931,13 @@ export default class Hologram {
 
     Hologram.#defineManuallyPortedFunctions();
 
-    Hologram.virtualDocument = toVNode(document.documentElement);
-    Vdom.addKeysToLinkAndScriptVnodes(Hologram.virtualDocument);
+    // PATCH (hydration-adopt) — downstream fork patch; see Vdom.fromLiveDom.
+    // Seed the boot vdom in the renderer's vnode shape, bound to the live DOM, so the first
+    // patch ADOPTS the SSR-rendered nodes instead of rebuilding the page (snabbdom's toVNode
+    // encoded id/class into `sel`, failing sameVnode for every classed element — the whole
+    // SSR paint was discarded and every <img> refetched/re-decoded on refresh). fromLiveDom
+    // carries the link/script keys itself, so addKeysToLinkAndScriptVnodes is not needed.
+    Hologram.virtualDocument = Vdom.fromLiveDom(document.documentElement);
 
     console.inspect = (term) => console.log(Interpreter.inspect(term));
 
