@@ -100,6 +100,17 @@ export default class Hologram {
   // put_state(...) + put_action(target: other) hand-off no longer paints a stale intermediate frame.
   static #actionCascadeDepth = 0;
   static #MAX_ACTION_CASCADE_DEPTH = 50;
+
+  // PATCH (dispatch-coalesce) — downstream fork patch; the other hunk (tagged the same) is in
+  // scheduleAction/#drainZeroDelayActions. Zero-delay dispatches queued for the next drain task:
+  // co-arriving dispatches (e.g. a Sync record and the :untyped broadcast flushed right after it
+  // on the same stream) must execute in ONE task, because the browser may paint between tasks —
+  // an intermediate frame where the first action's render is visible but the second's isn't
+  // (seen in-app as a one-frame layout bounce when a message replaces the typing ghost).
+  // REMOVE both hunks once upstream batches co-arriving dispatches into one rendering task.
+  static #pendingZeroDelayActions = [];
+  static #zeroDelayDrainScheduled = false;
+
   static #historyId = null;
   static #isInitiated = false;
   static #pageModule = null;
@@ -493,7 +504,48 @@ export default class Hologram {
       Type.integer(0),
     );
 
+    // PATCH (dispatch-coalesce) — zero-delay dispatches queued in the same tick (SSE events
+    // arriving in one chunk, broadcast fan-out to several cids, queued init actions) drain in a
+    // SINGLE task so all their renders paint together; a paint can never split a task, so no
+    // intermediate frame can show one dispatch's render without the other's. Execution order is
+    // unchanged (queue order = scheduling order). Delayed actions (delay > 0 — the intentional
+    // "async for animations" path) keep their own timers, exactly as before.
+    //
+    // REMOVE with the field hunk (see #pendingZeroDelayActions). The original body was:
+    //     setTimeout(() => Hologram.executeAction(action), Number(delay.value));
+    if (Number(delay.value) === 0) {
+      $.#pendingZeroDelayActions.push(action);
+
+      if (!$.#zeroDelayDrainScheduled) {
+        $.#zeroDelayDrainScheduled = true;
+        setTimeout(() => $.#drainZeroDelayActions(), 0);
+      }
+
+      return;
+    }
+
     setTimeout(() => Hologram.executeAction(action), Number(delay.value));
+  }
+
+  // PATCH (dispatch-coalesce) — drain everything queued by the time this task runs. The queue is
+  // snapshotted first: an action scheduled DURING the drain (e.g. the cascade-depth overflow
+  // fallback in #processActionResult) gets its own later task, exactly as before this patch. A
+  // throwing action doesn't abort the rest of the batch — each action ran in its own task before,
+  // so failures stay isolated; reportError re-dispatches through the window "error" event, which
+  // executeAction's error-detection contract relies on (see its comment).
+  static #drainZeroDelayActions() {
+    $.#zeroDelayDrainScheduled = false;
+
+    const batch = $.#pendingZeroDelayActions;
+    $.#pendingZeroDelayActions = [];
+
+    for (const action of batch) {
+      try {
+        Hologram.executeAction(action);
+      } catch (error) {
+        reportError(error);
+      }
+    }
   }
 
   static #buildPagePath(toParam) {
