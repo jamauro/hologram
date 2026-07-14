@@ -23,6 +23,7 @@ import MemoryStorage from "./memory_storage.mjs";
 import Operation from "./operation.mjs";
 import PerformanceTimer from "./performance_timer.mjs";
 import Renderer from "./renderer.mjs";
+import ScrollAnchor from "./scroll_anchor.mjs";
 import Serializer from "./serializer.mjs";
 import Sse from "./sse.mjs";
 import Throttler from "./throttler.mjs";
@@ -443,10 +444,17 @@ export default class Hologram {
       Hologram.#pageParams,
     );
 
+    // PATCH (scroll-anchor) — see scroll_anchor.mjs. The snapshot must straddle the DOM patch:
+    // taken here (after actions ran, so an action's own scrollTo is respected as the new
+    // position), restored immediately after patch (the framework's only "after render" moment).
+    const scrollAnchors = ScrollAnchor.snapshot();
+
     Hologram.virtualDocument = Vdom.patchVirtualDocument(
       Hologram.virtualDocument,
       newVirtualDocument,
     );
+
+    ScrollAnchor.restore(scrollAnchors);
 
     // renderPage() collected this render's <window>/<document> bindings into Renderer.listenerBindings
     // and its deferred element bindings (reach, resize) into Renderer.reachBindings and
