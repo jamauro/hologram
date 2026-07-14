@@ -187,9 +187,21 @@ export default class EventListeners {
     return {
       key: "intersection-observer",
       attach: (dispatcher) => {
-        const observer = new IntersectionObserver((entries) => {
-          dispatcher(entries[0]);
-        });
+        // PATCH (intersect-margin) — an element may opt into early/late firing via
+        // `data-intersect-margin` (any valid IntersectionObserver rootMargin string, e.g.
+        // "600px"). This replaces zero-footprint "band" geometry (tall element + negative
+        // margin) for fire-ahead sentinels: a band's box extends past the content edge whenever
+        // the surrounding content is shorter than the band, inflating scrollHeight with phantom
+        // scroll space (browser-caught: a one-row thread view scrolled ~500px past its content).
+        // rootMargin is the platform's own tool for "fire N px before the edge".
+        const rootMargin = element.dataset?.intersectMargin;
+
+        const observer = new IntersectionObserver(
+          (entries) => {
+            dispatcher(entries[0]);
+          },
+          rootMargin ? {rootMargin} : undefined,
+        );
 
         observer.observe(element);
 
