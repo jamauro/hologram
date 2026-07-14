@@ -1464,6 +1464,20 @@ export default class Interpreter {
     return false;
   }
 
+  // PATCH (pattern-walk-memo) — matchOperator runs this on the RIGHT side of every match,
+  // which includes every function-clause parameter of every transpiled call. Unmemoized, it
+  // deep-walked the whole VALUE each time: a dispatch passing a component whose state holds a
+  // few hundred records walked hundreds of thousands of nodes per call, dozens of times per
+  // dispatch — measured as the depth-proportional remainder of a ↓ click (~200ms at 700
+  // records) after the app-level walks were fixed.
+  //
+  // Caching by object identity is sound: pattern nodes (variable_pattern / cons_pattern /
+  // match_placeholder / match_pattern) exist only in compiled pattern ASTs — small, static
+  // objects — while runtime values are never mutated into containing patterns. Boxed containers
+  // are structurally shared, so even a brand-new state map re-walks only its top-level entries;
+  // the big child structures hit the cache by reference.
+  static #unresolvedVariablePatternCache = new WeakMap();
+
   static #hasUnresolvedVariablePattern(term) {
     const termType = term.type;
 
@@ -1482,38 +1496,41 @@ export default class Interpreter {
       return true;
     }
 
-    if (termType === "cons_pattern") {
-      return (
-        Interpreter.#hasUnresolvedVariablePattern(term.head) ||
-        Interpreter.#hasUnresolvedVariablePattern(term.tail)
-      );
+    const cached = Interpreter.#unresolvedVariablePatternCache.get(term);
+
+    if (cached !== undefined) {
+      return cached;
     }
 
-    if (termType === "list" || termType === "tuple") {
-      return term.data.some((item) =>
+    let result = false;
+
+    if (termType === "cons_pattern") {
+      result =
+        Interpreter.#hasUnresolvedVariablePattern(term.head) ||
+        Interpreter.#hasUnresolvedVariablePattern(term.tail);
+    } else if (termType === "list" || termType === "tuple") {
+      result = term.data.some((item) =>
         Interpreter.#hasUnresolvedVariablePattern(item),
       );
-    }
-
-    if (termType === "map") {
+    } else if (termType === "map") {
       for (const [key, value] of Object.values(term.data)) {
         if (
           Interpreter.#hasUnresolvedVariablePattern(key) ||
           Interpreter.#hasUnresolvedVariablePattern(value)
         ) {
-          return true;
+          result = true;
+          break;
         }
       }
-    }
-
-    if (termType === "match_pattern") {
-      return (
+    } else if (termType === "match_pattern") {
+      result =
         Interpreter.#hasUnresolvedVariablePattern(term.left) ||
-        Interpreter.#hasUnresolvedVariablePattern(term.right)
-      );
+        Interpreter.#hasUnresolvedVariablePattern(term.right);
     }
 
-    return false;
+    Interpreter.#unresolvedVariablePatternCache.set(term, result);
+
+    return result;
   }
 
   static #inspectAnonymousFunction(term, _opts) {
