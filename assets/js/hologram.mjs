@@ -144,7 +144,14 @@ export default class Hologram {
   // Deps: [:maps.get/2]
   static executeAction(action) {
     const startTime = performance.now();
-    globalThis.Hologram.isProfilingEnabled = true;
+    // PATCH (profiling-opt-in) — upstream enables per-function profiling for EVERY dispatch,
+    // logging one console line per interpreter call. With DevTools open each log costs real
+    // milliseconds, so an O(n) recursion inside a dispatch gets multiplied ~20× — measured: the
+    // same ↓ click ran 814ms with the console open vs ~40ms without, and every felt-latency
+    // report during dev was distorted the same way. Profile on demand instead:
+    //   globalThis.Hologram.profileDispatches = true
+    globalThis.Hologram.isProfilingEnabled =
+      globalThis.Hologram.profileDispatches === true;
 
     const name = Erlang_Maps["get/2"](Type.atom("name"), action);
     const params = Erlang_Maps["get/2"](Type.atom("params"), action);
