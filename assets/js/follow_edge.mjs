@@ -86,11 +86,17 @@ export default class FollowEdge {
       const entry = entries[id];
 
       if (firstSeen || (entry && entry.atEnd)) {
-        scroller.scrollTo({
-          top: scroller.scrollHeight - scroller.clientHeight,
-          left: scroller.scrollLeft,
-          behavior: "instant",
-        });
+        // Pin only when the patch actually LEFT the end — a positional no-op must not issue a
+        // scroll call, because any programmatic scroll (even to the current position) aborts an
+        // in-flight smooth scroll an action just started (e.g. a smooth scrollIntoView centering
+        // a jump target: it begins at the end, and an unconditional re-pin here killed it).
+        if (!atEnd(scroller)) {
+          scroller.scrollTo({
+            top: scroller.scrollHeight - scroller.clientHeight,
+            left: scroller.scrollLeft,
+            behavior: "instant",
+          });
+        }
 
         continue;
       }
