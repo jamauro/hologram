@@ -83,6 +83,14 @@ export default class FollowEdge {
         FollowEdge.seenIds.add(id);
       }
 
+      // A scroller carrying `data-scroll-animating` has DECLARED an intentional animated scroll
+      // (the app sets it around a smooth scrollIntoView and clears it on scrollend): stand down
+      // entirely — any scrollTo, even a positional no-op or a tiny delta measured against the
+      // moving position, CANCELS the animation (browser-caught: a dispatch landing mid-centering
+      // froze the jump-to-divider animation wherever it happened to be). Corrections maintain
+      // illusions; they yield to declared intent.
+      if (scroller.hasAttribute("data-scroll-animating")) continue;
+
       const entry = entries[id];
 
       if (firstSeen || (entry && entry.atEnd)) {
