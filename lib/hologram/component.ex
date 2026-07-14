@@ -422,7 +422,15 @@ defmodule Hologram.Component do
   end
 
   def put_state(%{state: state} = component, entries) when is_map(entries) do
-    %{component | state: Map.merge(state, entries)}
+    # PATCH (no-op put_state): writing values equal to the current ones returns the component
+    # UNCHANGED — the state term keeps its identity, so downstream change-detection (e.g. the
+    # memoized renderer's reference checks) sees a genuine no-op instead of an equal-but-new
+    # state map. A tick that learned nothing must not invalidate anything.
+    if Enum.all?(entries, fn {key, value} -> match?(%{^key => ^value}, state) end) do
+      component
+    else
+      %{component | state: Map.merge(state, entries)}
+    end
   end
 
   @doc """
@@ -437,7 +445,12 @@ defmodule Hologram.Component do
   end
 
   def put_state(%{state: state} = component, key, value) do
-    %{component | state: Map.put(state, key, value)}
+    # PATCH (no-op put_state) — see put_state/2. The pin-match also handles a missing key
+    # correctly (missing ≠ present-with-nil).
+    case state do
+      %{^key => ^value} -> component
+      _ -> %{component | state: Map.put(state, key, value)}
+    end
   end
 
   @doc """

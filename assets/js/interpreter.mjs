@@ -778,6 +778,13 @@ export default class Interpreter {
   }
 
   static isStrictlyEqual(left, right) {
+    // PATCH (identity fast-path): identical term objects are equal by any definition. Boxed
+    // terms are structurally shared, so equality checks over mostly-unchanged structures
+    // (an equality-aware put_state, list comparisons after a merge) collapse to O(changed).
+    if (left === right) {
+      return true;
+    }
+
     const leftType = left.type;
 
     if (leftType !== right.type) return false;

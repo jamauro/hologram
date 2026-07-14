@@ -537,9 +537,29 @@ defmodule Hologram.ComponentTest do
                state: %{a: 1, b: 2, c: 3}
              }
     end
+
+    test "no-op when every entry equals the current value (state keeps its identity)" do
+      component = %Component{state: %{a: 1, b: 2}}
+
+      assert put_state(component, %{a: 1, b: 2}) === component
+    end
+
+    test "writes when any entry differs" do
+      component = %Component{state: %{a: 1, b: 2}}
+
+      assert put_state(component, %{a: 1, b: 3}) == %Component{state: %{a: 1, b: 3}}
+    end
   end
 
   describe "put_state/3" do
+    test "no-op when the value equals the current one; a missing key still writes" do
+      component = %Component{state: %{a: 1, b: nil}}
+
+      assert put_state(component, :a, 1) === component
+      assert put_state(component, :b, nil) === component
+      assert put_state(component, :c, nil) == %Component{state: %{a: 1, b: nil, c: nil}}
+    end
+
     test "non-nested path" do
       component = %Component{state: %{a: 1, b: 2}}
       result = put_state(component, :b, 3)
