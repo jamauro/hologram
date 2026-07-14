@@ -89,6 +89,14 @@ export default class Vdom {
       data.key = `__hologramScript__:${attrs.src}`;
     } else if (tagName === "script" && node.textContent) {
       data.key = `__hologramScript__:${node.textContent}`;
+    } else if (typeof attrs["data-key"] === "string" && attrs["data-key"]) {
+      // PATCH (keyed-lists) — see renderer.mjs; the adoption seed must carry the same keys.
+      data.key = attrs["data-key"];
+    } else if (
+      typeof attrs["data-anchor"] === "string" &&
+      attrs["data-anchor"]
+    ) {
+      data.key = attrs["data-anchor"];
     }
 
     const children = Array.from(node.childNodes).map(Vdom.fromLiveDom);
@@ -316,6 +324,14 @@ export default class Vdom {
     } else if (tagName === "script" && node.textContent) {
       // Make sure the script is executed if the code changes.
       data.key = `__hologramScript__:${node.textContent}`;
+    } else if (typeof attrs["data-key"] === "string" && attrs["data-key"]) {
+      // PATCH (keyed-lists) — see renderer.mjs; the navigation-side seed carries the same keys.
+      data.key = attrs["data-key"];
+    } else if (
+      typeof attrs["data-anchor"] === "string" &&
+      attrs["data-anchor"]
+    ) {
+      data.key = attrs["data-anchor"];
     }
 
     return vnode(tagName, data, children);

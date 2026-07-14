@@ -1605,6 +1605,25 @@ export default class Renderer {
     } else if (currentTagName === "script" && childrenVdom[0]) {
       // Make sure the script is executed if the code changes.
       data.key = `__hologramScript__:${childrenVdom[0]}`;
+    } else if (
+      typeof attrsVdom["data-key"] === "string" &&
+      attrsVdom["data-key"]
+    ) {
+      // PATCH (keyed-lists) — downstream fork patch; the twin hunks are in vdom.mjs's two
+      // DOM-tree builders (hydration adoption must stamp the SAME keys or every keyed element
+      // fails sameVnode on boot and the SSR paint is rebuilt).
+      //
+      // An element carrying `data-key` (explicit) or `data-anchor` (the content-identity key
+      // rows already carry) becomes a KEYED vnode: snabbdom's keyed reconciliation then keeps/
+      // moves real DOM nodes across list mutations instead of positionally rewriting every
+      // sibling's content — a prepend inserts only the new nodes, and existing nodes MOVE
+      // (which native scroll anchoring can compensate).
+      data.key = attrsVdom["data-key"];
+    } else if (
+      typeof attrsVdom["data-anchor"] === "string" &&
+      attrsVdom["data-anchor"]
+    ) {
+      data.key = attrsVdom["data-anchor"];
     }
 
     const elementVnode = vnode(currentTagName, data, childrenVdom);
