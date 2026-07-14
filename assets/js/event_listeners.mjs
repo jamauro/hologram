@@ -178,37 +178,6 @@ export default class EventListeners {
     return distance <= threshold;
   }
 
-  // An IntersectionObserver listener for a single element. The key is constant - an element has at
-  // most one intersect observer - so a re-render refreshes it rather than stacking a second. Unlike
-  // $resize, the initial on-observe fire is NOT suppressed: $intersect means "visibility changed",
-  // and an element already in view at mount is a meaningful first observation (lazy-load, infinite
-  // scroll). Every observation dispatches its IntersectionObserverEntry.
-  static intersectionObserver(element) {
-    return {
-      key: "intersection-observer",
-      attach: (dispatcher) => {
-        // PATCH (intersect-margin) — an element may opt into early/late firing via
-        // `data-intersect-margin` (any valid IntersectionObserver rootMargin string, e.g.
-        // "600px"). This replaces zero-footprint "band" geometry (tall element + negative
-        // margin) for fire-ahead sentinels: a band's box extends past the content edge whenever
-        // the surrounding content is shorter than the band, inflating scrollHeight with phantom
-        // scroll space (browser-caught: a one-row thread view scrolled ~500px past its content).
-        // rootMargin is the platform's own tool for "fire N px before the edge".
-        const rootMargin = element.dataset?.intersectMargin;
-
-        const observer = new IntersectionObserver(
-          (entries) => {
-            dispatcher(entries[0]);
-          },
-          rootMargin ? {rootMargin} : undefined,
-        );
-
-        observer.observe(element);
-
-        return () => observer.disconnect();
-      },
-    };
-  }
 }
 
 const $ = EventListeners;

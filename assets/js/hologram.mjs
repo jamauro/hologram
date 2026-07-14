@@ -41,7 +41,6 @@ import PointerEvent from "./events/pointer_event.mjs";
 import ReachEvent from "./events/reach_event.mjs";
 import ResizeEvent from "./events/resize_event.mjs";
 import ScrollEvent from "./events/scroll_event.mjs";
-import IntersectEvent from "./events/intersect_event.mjs";
 import SelectEvent from "./events/select_event.mjs";
 import SubmitEvent from "./events/submit_event.mjs";
 import TransitionEvent from "./events/transition_event.mjs";
@@ -444,7 +443,6 @@ export default class Hologram {
       ...Renderer.resolveListenerBindings(),
       ...Renderer.resolveReachBindings(),
       ...Renderer.resolveResizeBindings(),
-      ...Renderer.resolveIntersectBindings(),
     ]);
 
     // Reach listeners persist across renders, so reconcile alone does not re-run them. Recheck them
@@ -834,9 +832,6 @@ export default class Hologram {
 
       case "scroll":
         return ScrollEvent;
-
-      case "intersect":
-        return IntersectEvent;
 
       case "select":
         return SelectEvent;
