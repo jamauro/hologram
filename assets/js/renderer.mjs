@@ -114,11 +114,107 @@ export default class Renderer {
     }
   }
 
+  // PATCH (memo-subtrees) — downstream fork spike.
+  //
+  // Per-cid memoization of stateful-component subtrees: a component whose render INPUTS are
+  // unchanged returns the exact vnode objects of its previous render. snabbdom's patchVnode
+  // short-circuits on object identity (oldVnode === newVnode ⇒ return), so a cache hit costs
+  // zero template execution, zero vnode construction AND zero DOM diffing for the whole subtree
+  // — the platform-level fix for "every dispatch re-renders the whole page".
+  //
+  // Inputs, ALL of which must be unchanged for a hit (compared by reference first, then deep —
+  // see #memoEq): the component's own state + emitted context (from its registry struct; a
+  // dispatch replaces the target's struct wholesale, so unchanged components keep reference-
+  // stable terms), its resolved props, inherited context, expanded children DOM, parent tag —
+  // plus, TRANSITIVELY, every stateful DESCENDANT's state + emitted context (validated by
+  // reference against the registry): a dirty child invalidates its whole ancestor chain, while
+  // the chain's SIBLINGS keep hitting. Correctness leans on renders being pure functions of
+  // these inputs.
+  //
+  // A hit must also RE-EMIT the subtree's collected side-band bindings (listener/reach/resize/
+  // intersect — reconcile drops anything not re-collected each render) — captured as array
+  // slices during the original render.
+  static #memoCache = new Map();
+  static #memoStack = [];
+
+  // Reference-first structural equality: `===` short-circuits at EVERY level, so comparing a
+  // fresh term that shares unchanged substructure (a rebuilt props map whose values came from
+  // reference-stable state assigns) costs O(top-level keys), not a deep walk. Falls through to
+  // the interpreter's strict equality for scalar/other boxed types.
+  static #memoEq(a, b) {
+    if (a === b) return true;
+    if (a === null || b === null || a === undefined || b === undefined) return false;
+    if (a.type !== b.type) return false;
+
+    switch (a.type) {
+      case "map": {
+        const keys1 = Object.keys(a.data);
+        if (keys1.length !== Object.keys(b.data).length) return false;
+        for (const key of keys1) {
+          if (!(key in b.data) || !$.#memoEq(a.data[key][1], b.data[key][1])) {
+            return false;
+          }
+        }
+        return true;
+      }
+
+      case "list": {
+        if (a.isProper !== b.isProper || a.data.length !== b.data.length) {
+          return false;
+        }
+        for (let i = 0; i < a.data.length; i++) {
+          if (!$.#memoEq(a.data[i], b.data[i])) return false;
+        }
+        return true;
+      }
+
+      case "tuple": {
+        if (a.data.length !== b.data.length) return false;
+        for (let i = 0; i < a.data.length; i++) {
+          if (!$.#memoEq(a.data[i], b.data[i])) return false;
+        }
+        return true;
+      }
+
+      default:
+        return Interpreter.isStrictlyEqual(a, b);
+    }
+  }
+
+  // A descendant registers into every ACTIVE ancestor frame (hit or miss), so each memo entry
+  // carries the full transitive stateful-descendant set to validate against the registry later.
+  // `withNested` is true only on the HIT path: a hit's nested components never rendered, so its
+  // cached descendant records must be re-registered explicitly; on a miss they already pushed
+  // themselves into every active frame while rendering.
+  static #memoRegisterInAncestors(record, withNested) {
+    for (const frame of $.#memoStack) {
+      frame.descendants.push(record);
+      if (withNested) {
+        for (const d of record.descendants) {
+          frame.descendants.push(d);
+        }
+      }
+    }
+  }
+
+  static #memoDescendantsFresh(entry) {
+    for (const d of entry.descendants) {
+      if (
+        ComponentRegistry.getComponentState(d.cid) !== d.state ||
+        ComponentRegistry.getComponentEmittedContext(d.cid) !== d.emittedContext
+      ) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   // Based on: render_page/2
   static renderPage(pageModule, pageParams) {
     Renderer.listenerBindings = [];
     Renderer.reachBindings = [];
     Renderer.resizeBindings = [];
+    Renderer.#memoStack = [];
 
     const pageModuleProxy = Interpreter.moduleProxy(pageModule);
 
@@ -1698,6 +1794,41 @@ export default class Renderer {
     const [componentState, componentEmittedContext] =
       Renderer.#maybeInitComponent(cid, moduleProxy, props);
 
+    // PATCH (memo-subtrees) — see the notes above renderPage. Unchanged inputs ⇒ return the
+    // previous render's exact vnode objects (snabbdom then skips the whole subtree by identity).
+    const cidKey = Type.encodeMapKey(cid);
+    const entry = Renderer.#memoCache.get(cidKey);
+
+    if (
+      entry &&
+      entry.parentTagName === parentTagName &&
+      Renderer.#memoEq(entry.state, componentState) &&
+      Renderer.#memoEq(entry.emittedContext, componentEmittedContext) &&
+      Renderer.#memoEq(entry.props, props) &&
+      Renderer.#memoEq(entry.context, context) &&
+      Renderer.#memoEq(entry.childrenDom, childrenDom) &&
+      Renderer.#memoDescendantsFresh(entry)
+    ) {
+      Renderer.listenerBindings.push(...entry.bindings.listener);
+      Renderer.reachBindings.push(...entry.bindings.reach);
+      Renderer.resizeBindings.push(...entry.bindings.resize);
+      Renderer.intersectBindings.push(...entry.bindings.intersect);
+
+      ComponentRegistry.putComponentContext(cid, entry.mergedContext);
+
+      Renderer.#memoRegisterInAncestors(
+        {
+          cid,
+          state: componentState,
+          emittedContext: componentEmittedContext,
+          descendants: entry.descendants,
+        },
+        true,
+      );
+
+      return entry.vdom;
+    }
+
     const vars = Erlang_Maps["merge/2"](props, componentState);
     const mergedContext = Erlang_Maps["merge/2"](
       context,
@@ -1708,14 +1839,62 @@ export default class Renderer {
     // would inherit if rendered here (the merged value is already computed for #renderTemplate).
     ComponentRegistry.putComponentContext(cid, mergedContext);
 
-    return Renderer.#renderTemplate(
-      moduleProxy,
-      vars,
+    const frame = {
+      descendants: [],
+      marks: {
+        listener: Renderer.listenerBindings.length,
+        reach: Renderer.reachBindings.length,
+        resize: Renderer.resizeBindings.length,
+        intersect: Renderer.intersectBindings.length,
+      },
+    };
+
+    Renderer.#memoStack.push(frame);
+
+    let vdom;
+
+    try {
+      vdom = Renderer.#renderTemplate(
+        moduleProxy,
+        vars,
+        childrenDom,
+        mergedContext,
+        cid,
+        parentTagName,
+      );
+    } finally {
+      Renderer.#memoStack.pop();
+    }
+
+    Renderer.#memoCache.set(cidKey, {
+      parentTagName,
+      state: componentState,
+      emittedContext: componentEmittedContext,
+      props,
+      context,
       childrenDom,
       mergedContext,
-      cid,
-      parentTagName,
+      vdom,
+      descendants: frame.descendants,
+      bindings: {
+        listener: Renderer.listenerBindings.slice(frame.marks.listener),
+        reach: Renderer.reachBindings.slice(frame.marks.reach),
+        resize: Renderer.resizeBindings.slice(frame.marks.resize),
+        intersect: Renderer.intersectBindings.slice(frame.marks.intersect),
+      },
+    });
+
+    Renderer.#memoRegisterInAncestors(
+      {
+        cid,
+        state: componentState,
+        emittedContext: componentEmittedContext,
+        descendants: frame.descendants,
+      },
+      false,
     );
+
+    return vdom;
   }
 
   // Warms a stateful component off-DOM: runs the SAME init path as
