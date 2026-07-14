@@ -11,6 +11,7 @@ import Deserializer from "./deserializer.mjs";
 import ERTS from "./erts.mjs";
 import EventListenerRegistry from "./event_listener_registry.mjs";
 import EventListeners from "./event_listeners.mjs";
+import FollowEdge from "./follow_edge.mjs";
 import GlobalRegistry from "./global_registry.mjs";
 import HologramBoxedError from "./errors/boxed_error.mjs";
 import HologramInterpreterError from "./errors/interpreter_error.mjs";
@@ -22,7 +23,6 @@ import MemoryStorage from "./memory_storage.mjs";
 import Operation from "./operation.mjs";
 import PerformanceTimer from "./performance_timer.mjs";
 import Renderer from "./renderer.mjs";
-import ScrollAnchor from "./scroll_anchor.mjs";
 import Serializer from "./serializer.mjs";
 import Sse from "./sse.mjs";
 import Type from "./type.mjs";
@@ -414,17 +414,17 @@ export default class Hologram {
       Hologram.#pageParams,
     );
 
-    // PATCH (scroll-anchor) — see scroll_anchor.mjs. The snapshot must straddle the DOM patch:
+    // PATCH (follow-edge) — see follow_edge.mjs. The snapshot must straddle the DOM patch:
     // taken here (after actions ran, so an action's own scrollTo is respected as the new
-    // position), restored immediately after patch (the framework's only "after render" moment).
-    const scrollAnchors = ScrollAnchor.snapshot();
+    // position), applied immediately after patch (the framework's only "after render" moment).
+    const followEdges = FollowEdge.snapshot();
 
     Hologram.virtualDocument = Vdom.patchVirtualDocument(
       Hologram.virtualDocument,
       newVirtualDocument,
     );
 
-    ScrollAnchor.restore(scrollAnchors);
+    FollowEdge.restore(followEdges);
 
     // renderPage() collected this render's <window>/<document> bindings into Renderer.listenerBindings
     // and its deferred element bindings (reach, resize) into Renderer.reachBindings and
