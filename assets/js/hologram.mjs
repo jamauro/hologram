@@ -316,6 +316,16 @@ export default class Hologram {
       event.stopPropagation?.();
     }
 
+    // A modifier-only binding carries modifiers but no operation (e.g. $click.stop_propagation with
+    // no ={...}): its spec DOM is empty. preventDefault/stopPropagation have already run above, so
+    // there is nothing to dispatch — return before building an operation with an empty name atom
+    // (which would fall through to #constructFromMultiChunkSyntaxSpec and crash at dispatch). This
+    // is the "claim this event and do nothing" primitive: it lets a nested native target (an <a>, a
+    // <button>) stop the click reaching an ancestor binding without paying a no-op action's render.
+    if (operationSpecDom.data.length === 0) {
+      return null;
+    }
+
     const eventParam = eventImpl.buildOperationParam(event);
     const eventTarget = event.target;
 
