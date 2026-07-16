@@ -4280,6 +4280,39 @@ describe("Interpreter", () => {
 
         assert.isFalse(isStrictlyEqual(map1, map2));
       });
+
+      // Size mismatches must fail in BOTH directions — the size guard once read a bare
+      // `data.length` (undefined on the hash-table object), which never fired and let a
+      // subset pass as "equal".
+      it("not equal - left is a strict subset of right", () => {
+        const map1 = Type.map([[Type.atom("a"), Type.integer(1)]]);
+
+        const map2 = Type.map([
+          [Type.atom("a"), Type.integer(1)],
+          [Type.atom("b"), Type.integer(2)],
+        ]);
+
+        assert.isFalse(isStrictlyEqual(map1, map2));
+      });
+
+      it("not equal - right is a strict subset of left", () => {
+        const map1 = Type.map([
+          [Type.atom("a"), Type.integer(1)],
+          [Type.atom("b"), Type.integer(2)],
+        ]);
+
+        const map2 = Type.map([[Type.atom("a"), Type.integer(1)]]);
+
+        assert.isFalse(isStrictlyEqual(map1, map2));
+      });
+
+      it("not equal - empty map vs non-empty map", () => {
+        const map1 = Type.map();
+        const map2 = Type.map([[Type.atom("a"), Type.integer(1)]]);
+
+        assert.isFalse(isStrictlyEqual(map1, map2));
+        assert.isFalse(isStrictlyEqual(map2, map1));
+      });
     });
 
     describe("PIDs", () => {
