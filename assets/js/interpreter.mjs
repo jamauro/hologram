@@ -1601,9 +1601,12 @@ export default class Interpreter {
     const data1 = map1.data;
     const data2 = map2.data;
 
-    if (data1.length !== data2.length) return false;
-
     const keys = Object.keys(data1);
+
+    // data is a plain hash-table object, so size must come from Object.keys() — a bare
+    // `data.length` is undefined on both sides, which made this guard dead code and the
+    // whole comparison one-directional (map1 ⊆ map2 passed as "equal").
+    if (keys.length !== Object.keys(data2).length) return false;
 
     for (let i = 0; i < keys.length; ++i) {
       const key = keys[i];
