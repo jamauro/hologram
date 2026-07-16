@@ -426,7 +426,11 @@ defmodule Hologram.Component do
     # UNCHANGED — the state term keeps its identity, so downstream change-detection (e.g. the
     # memoized renderer's reference checks) sees a genuine no-op instead of an equal-but-new
     # state map. A tick that learned nothing must not invalidate anything.
-    if Enum.all?(entries, fn {key, value} -> match?(%{^key => ^value}, state) end) do
+    # Explicit === equality, NOT a pin-match: the client compiler resolves pins into plain
+    # terms inside patterns, where a map value degrades to map-PATTERN subset semantics
+    # (%{} matches ANY map) — so a map that lost keys read "unchanged" and the write was
+    # silently discarded (browser-caught: typing dots could never clear).
+    if Enum.all?(entries, fn {key, value} -> Map.fetch(state, key) === {:ok, value} end) do
       component
     else
       %{component | state: Map.merge(state, entries)}
@@ -445,11 +449,13 @@ defmodule Hologram.Component do
   end
 
   def put_state(%{state: state} = component, key, value) do
-    # PATCH (no-op put_state) — see put_state/2. The pin-match also handles a missing key
-    # correctly (missing ≠ present-with-nil).
-    case state do
-      %{^key => ^value} -> component
-      _ -> %{component | state: Map.put(state, key, value)}
+    # PATCH (no-op put_state) — see put_state/2 for why explicit equality, not a pin-match.
+    # Map.fetch distinguishes a missing key (:error) from present-with-nil, so a missing
+    # key still writes.
+    if Map.fetch(state, key) === {:ok, value} do
+      component
+    else
+      %{component | state: Map.put(state, key, value)}
     end
   end
 

@@ -549,6 +549,16 @@ defmodule Hologram.ComponentTest do
 
       assert put_state(component, %{a: 1, b: 3}) == %Component{state: %{a: 1, b: 3}}
     end
+
+    # Regression: the no-op guard must use exact equality, not a pattern match — on the
+    # client a map value in a pattern subset-matches (%{} matches ANY map), so a shrunken
+    # map read "unchanged" and the write was discarded.
+    test "writes when a map value lost keys" do
+      component = %Component{state: %{a: %{x: 1, y: 2}}}
+
+      assert put_state(component, %{a: %{x: 1}}) == %Component{state: %{a: %{x: 1}}}
+      assert put_state(component, %{a: %{}}) == %Component{state: %{a: %{}}}
+    end
   end
 
   describe "put_state/3" do
@@ -558,6 +568,14 @@ defmodule Hologram.ComponentTest do
       assert put_state(component, :a, 1) === component
       assert put_state(component, :b, nil) === component
       assert put_state(component, :c, nil) == %Component{state: %{a: 1, b: nil, c: nil}}
+    end
+
+    # Regression: see put_state/2 "writes when a map value lost keys".
+    test "writes when a map value lost keys" do
+      component = %Component{state: %{a: %{x: 1, y: 2}}}
+
+      assert put_state(component, :a, %{x: 1}) == %Component{state: %{a: %{x: 1}}}
+      assert put_state(component, :a, %{}) == %Component{state: %{a: %{}}}
     end
 
     test "non-nested path" do
