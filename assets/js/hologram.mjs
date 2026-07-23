@@ -200,6 +200,52 @@ export default class Hologram {
     }
   }
 
+  // PATCH (resume-hook) — invoke a component's `resume/1` lifecycle callback on reconnect (dispatched
+  // per re-subscribed cid from sse.mjs). Mirrors executeAction's plumbing but calls `resume` (arity 1,
+  // just the struct) instead of `action`, and reuses #processActionResult so any chained
+  // put_command/put_action drains exactly as an action's would. A gone cid is a no-op (same as
+  // executeAction). Every component has a default no-op `resume`, so an unhandled cid never raises.
+  static executeResume(target) {
+    const componentModule = ComponentRegistry.getComponentModule(target);
+
+    if (componentModule === null) {
+      return;
+    }
+
+    const startTime = performance.now();
+    globalThis.Hologram.isProfilingEnabled =
+      globalThis.Hologram.profileDispatches === true;
+
+    const componentStruct = ComponentRegistry.getComponentStruct(target);
+
+    const context = Interpreter.buildContext({
+      module: componentModule,
+      vars: {},
+    });
+
+    const resultComponentStruct = Interpreter.callNamedFunction(
+      componentModule,
+      Type.atom("resume"),
+      Type.list([componentStruct]),
+      context,
+    );
+
+    const name = Type.atom("resume");
+
+    if (resultComponentStruct instanceof Promise) {
+      resultComponentStruct.then((resolved) =>
+        Hologram.#processActionResult(resolved, name, target, startTime),
+      );
+    } else {
+      Hologram.#processActionResult(
+        resultComponentStruct,
+        name,
+        target,
+        startTime,
+      );
+    }
+  }
+
   // Made public to make tests easier
   static executeLoadPrefetchedPageAction(action, eventTargetNode) {
     Hologram.#ensureDomNodeHasHologramId(eventTargetNode);

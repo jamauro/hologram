@@ -84,25 +84,22 @@ export default class Sse {
       App.subscriptionReceiptRegistry.merge(refreshed, Type.list());
 
       // Resume signal. On a *reconnect* (the stream is back after a gap), each re-subscribed
-      // component may have missed broadcasts while disconnected — dispatch a `resumed` action to
-      // it so it can catch up. Gated on `connectedOnce`, NOT on a non-empty receipt set: SSR seeds
-      // subscription receipts before the first handshake ever runs, so a receipt-count proxy mis-
-      // fires `resumed` to every component on the initial load. `connectedOnce` flips only after a
+      // component may have missed broadcasts while disconnected — invoke its `resume/1` lifecycle
+      // callback so it can catch up. Gated on `connectedOnce`, NOT on a non-empty receipt set: SSR
+      // seeds subscription receipts before the first handshake ever runs, so a receipt-count proxy
+      // mis-fires resume to every component on the initial load. `connectedOnce` flips only after a
       // real EventSource open, so the first connect (page load) is never a resume.
       // Receipts are `[channel, cid, token]`; the dispatcher is the symmetric partner to
-      // `put_subscription` — the framework knows exactly who to notify.
+      // `put_subscription` — the framework knows exactly who to notify. `resume/1` has a default
+      // no-op, so a component that doesn't override it safely ignores the signal (no unhandled-action
+      // crash, which a broadcast-to-all-subscribers ACTION would have caused). Deferred to its own
+      // task so it runs after the handshake settles, matching the prior scheduleAction semantics.
       if ($.connectedOnce && preHandshakeReceiptCount > 0) {
         for (const receipt of refreshed.data) {
           const cid = receipt.data[1];
 
           if (ComponentRegistry.isCidRegistered(cid)) {
-            Hologram.scheduleAction(
-              Type.actionStruct({
-                name: Type.atom("resumed"),
-                params: Type.map(),
-                target: cid,
-              }),
-            );
+            setTimeout(() => Hologram.executeResume(cid), 0);
           }
         }
       }

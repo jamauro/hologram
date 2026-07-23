@@ -625,9 +625,11 @@ defmodule Hologram.Compiler.CallGraph do
       {page_module, :__params__, 0},
       {page_module, :__route__, 0},
       {page_module, :action, 3},
+      {page_module, :resume, 1},
       {page_module, :template, 0},
       {layout_module, :__props__, 0},
       {layout_module, :action, 3},
+      {layout_module, :resume, 1},
       {layout_module, :template, 0}
     ]
   end
@@ -969,6 +971,7 @@ defmodule Hologram.Compiler.CallGraph do
     |> add_edge(module, {module, :__props__, 0})
     |> add_edge(module, {module, :action, 3})
     |> add_edge(module, {module, :init, 2})
+    |> add_edge(module, {module, :resume, 1})
     |> add_edge(module, {module, :template, 0})
   end
 

@@ -64,11 +64,19 @@ defmodule Hologram.Component do
               {Component.t(), Server.t()} | Component.t() | Server.t()
 
   @doc """
+  Called on each re-subscribed component when the realtime stream resumes after a reconnect gap,
+  so it can catch up on broadcasts missed while disconnected. The sibling to `init/2` on the
+  reconnect axis: `init` runs once at lifecycle start, `resume` runs on each subsequent resume.
+  Optional — the default is a no-op, so a component that doesn't care about reconnect ignores it.
+  """
+  @callback resume(Component.t()) :: Component.t()
+
+  @doc """
   Returns a template in the form of an anonymous function that given variable bindings returns a DOM.
   """
   @callback template() :: (map -> list)
 
-  @optional_callbacks [action: 3, command: 3, init: 2]
+  @optional_callbacks [action: 3, command: 3, init: 2, resume: 1]
 
   @doc false
   @spec __helper_imports__() :: keyword
@@ -132,6 +140,14 @@ defmodule Hologram.Component do
         def init(_props, component, server), do: {component, server}
 
         defoverridable init: 3
+
+        # Reconnect catch-up hook (see the `resume/1` callback docs). The default no-op is what makes
+        # the framework's per-subscribed-component resume dispatch safe: a component that doesn't
+        # override it simply ignores the reconnect signal instead of raising on an unhandled call.
+        @impl Component
+        def resume(component), do: component
+
+        defoverridable resume: 1
       end,
       maybe_register_colocated_template_markup(template_path),
       register_props_accumulator()
