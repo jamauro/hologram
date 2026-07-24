@@ -160,6 +160,17 @@ export default class Hologram {
     // (an action targeting a gone component is a no-op).
     if (componentModule === null) {
       globalThis.Hologram.isProfilingEnabled = false;
+      // PATCH (inline-action-cascade) — if this dispatch is the inline continuation of a cascade,
+      // the parent DEFERRED its own paint to the tail of the chain, expecting this action to render.
+      // A gone target must therefore still flush that deferred paint (and queued-init scheduling)
+      // before bailing, or the parent's already-committed state change never reaches the DOM — the
+      // same flush the async branch does below. Without this, put_state(...) + put_action(target:
+      // gone-cid) silently loses the caller's repaint. Remove with the other (inline-action-cascade)
+      // hunks when upstream coalesces the cascade.
+      if (Hologram.#actionCascadeDepth > 0) {
+        Hologram.render();
+        Hologram.#scheduleQueuedInitActions();
+      }
       return;
     }
 
