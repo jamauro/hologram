@@ -1885,7 +1885,17 @@ export default class Renderer {
     const [componentState, componentEmittedContext] =
       Renderer.#maybeInitComponent(cid, moduleProxy, props);
 
-    Renderer.#parentCids.set(Type.encodeMapKey(cid), parentCid);
+    // A root renders with itself already in scope as the default target (the layout is entered with
+    // defaultTarget "layout"), which would record it as its own parent and make the bubbling walk
+    // loop forever. A root has no parent.
+    const cidKeyForParent = Type.encodeMapKey(cid);
+
+    Renderer.#parentCids.set(
+      cidKeyForParent,
+      parentCid !== null && Type.encodeMapKey(parentCid) === cidKeyForParent
+        ? null
+        : parentCid,
+    );
 
     // PATCH (memo-subtrees) — see the notes above renderPage. Unchanged inputs ⇒ return the
     // previous render's exact vnode objects (snabbdom then skips the whole subtree by identity).
