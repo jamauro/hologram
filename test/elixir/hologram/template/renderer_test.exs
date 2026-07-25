@@ -75,6 +75,7 @@ defmodule Hologram.Template.RendererTest do
   alias Hologram.Test.Fixtures.Template.Renderer.Module90
   alias Hologram.Test.Fixtures.Template.Renderer.Module91
   alias Hologram.Test.Fixtures.Template.Renderer.Module92
+  alias Hologram.Test.Fixtures.Template.Renderer.Module93
   alias Hologram.Test.Fixtures.Template.Renderer.Module94
   alias Hologram.Test.Fixtures.Template.Renderer.Module95
   alias Hologram.Test.Fixtures.Template.Renderer.Module9
@@ -1062,6 +1063,14 @@ defmodule Hologram.Template.RendererTest do
       {html, _registry, _server} = render_dom(node, @env, @server)
 
       assert html == ~s(<div data-key="a">a</div><div data-key="b">b</div>)
+    end
+
+    test "a discarded binding leaves the loop unkeyed (and reads no underscored variable)" do
+      node = {:component, Module93, [{"cid", [text: "list"]}], []}
+
+      {html, _registry, _server} = render_dom(node, @env, @server)
+
+      assert html == "<div></div><div></div><div></div>"
     end
 
     test "an explicit cid prop wins over key/1 and stays unscoped" do

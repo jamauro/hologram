@@ -155,9 +155,11 @@ defmodule Hologram.Template.DOM do
 
   # The implicit key needs a name for the item, so it applies only to a lone `var <- enum` generator.
   # Several generators, a filter, or a destructuring pattern leave the loop unkeyed rather than
-  # guessing which binding carries the identity.
+  # guessing which binding carries the identity. An underscored binding is excluded too: reading a
+  # value the author explicitly discarded would be both wrong (it can't be an identity) and noisy
+  # (Elixir warns on using an underscored variable, which is an error in a --warnings-as-errors app).
   defp default_key_code([generator]) do
-    case Regex.run(~r/^\s*([a-z_][a-zA-Z0-9_]*)\s*<-/, generator) do
+    case Regex.run(~r/^\s*([a-z][a-zA-Z0-9_]*)\s*<-/, generator) do
       [_match, item_var] -> "Hologram.Template.DOM.default_key(#{item_var})"
       nil -> "nil"
     end
