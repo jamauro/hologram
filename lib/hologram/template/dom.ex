@@ -76,6 +76,131 @@ defmodule Hologram.Template.DOM do
 
   defp decompose_event_attribute_name(name), do: {name, []}
 
+  # Splits a `{%for}` head into its generator and the code producing each iteration's key.
+  #
+  # An explicit `, key: <expr>` wins. Otherwise the key defaults to the item's `:id`, which requires
+  # knowing what to call the item — so the default applies only to the plain `var <- enum` form. A
+  # destructuring pattern, several generators or a filter all fall back to unkeyed rather than
+  # guessing which binding is the identity.
+  defp split_key_option(content) do
+    segments = split_top_level_commas(content)
+
+    case List.last(segments) do
+      <<_::binary>> = last ->
+        case Regex.run(~r/^\s*key:\s*(.+)$/s, last) do
+          [_match, key_expr] ->
+            generator = segments |> Enum.drop(-1) |> Enum.join(",")
+            {generator, "(#{key_expr})"}
+
+          nil ->
+            {content, default_key_code(segments)}
+        end
+
+      _fallback ->
+        {content, "nil"}
+    end
+  end
+
+  # The implicit key needs a name for the item, so it applies only to a lone `var <- enum` generator.
+  # Several generators, a filter, or a destructuring pattern leave the loop unkeyed rather than
+  # guessing which binding carries the identity.
+  defp default_key_code([generator]) do
+    case Regex.run(~r/^\s*([a-z_][a-zA-Z0-9_]*)\s*<-/, generator) do
+      [_match, item_var] -> "Hologram.Template.DOM.default_key(#{item_var})"
+      nil -> "nil"
+    end
+  end
+
+  defp default_key_code(_segments), do: "nil"
+
+  # Splits on commas that separate the `{%for}` head's own parts, ignoring those nested inside a call,
+  # list, map or string — `{%for x <- f(a, b), key: x.id}` has exactly one top-level comma, and a map
+  # literal carrying its own `key:` must not read as the key option.
+  defp split_top_level_commas(content) do
+    {segments, last, _depth, _quote} =
+      content
+      |> String.graphemes()
+      |> Enum.reduce({[], "", 0, nil}, &scan_grapheme/2)
+
+    segments ++ [last]
+  end
+
+  defp scan_grapheme(char, {segments, current, depth, quote_char}) do
+    cond do
+      quote_char && char == quote_char -> {segments, current <> char, depth, nil}
+      quote_char -> {segments, current <> char, depth, quote_char}
+      char in ~w(" ') -> {segments, current <> char, depth, char}
+      char in ~w|( [ {| -> {segments, current <> char, depth + 1, nil}
+      char in ~w|) ] }| -> {segments, current <> char, depth - 1, nil}
+      char == "," && depth == 0 -> {segments ++ [current], "", depth, nil}
+      true -> {segments, current <> char, depth, nil}
+    end
+  end
+
+  @doc """
+  The implicit `{%for}` key for an item: its `:id` when it has one, otherwise `nil` (unkeyed).
+  Called from compiled template code, so it runs on both the server and the client.
+  """
+  @spec default_key(any) :: any
+  def default_key(item) when is_map(item), do: Map.get(item, :id)
+  def default_key(_item), do: nil
+
+  @doc """
+  Attaches an iteration's key to the node it repeats.
+
+  The key goes to the first COMPONENT node if there is one — becoming its identity, which the
+  renderer scopes by the enclosing component — and otherwise to the first element, as `data-key`.
+  Only the first: sibling nodes from one iteration can't share a key without colliding, and the
+  repeated thing is the component when there is one (the `{%if}` that may also sit in the loop body
+  is a conditional decoration of it, not another instance).
+
+  A nil key returns the nodes untouched, and an explicit `cid` or `data-key` written at the call site
+  is left alone — spelling it out beats the implicit key.
+  """
+  @spec key_nodes(any, t) :: t
+  def key_nodes(nil, nodes), do: nodes
+
+  def key_nodes(key, nodes) do
+    if Enum.any?(nodes, &component?/1) do
+      key_first(nodes, &component?/1, &put_component_key(&1, key))
+    else
+      key_first(nodes, &element?/1, &put_element_key(&1, key))
+    end
+  end
+
+  defp component?({:component, _module, _props, _children}), do: true
+  defp component?(_node), do: false
+
+  defp element?({:element, _tag, _attrs, _children}), do: true
+  defp element?(_node), do: false
+
+  # Replaces the first node matching `match?` with `apply_key.(node)`, leaving everything else alone.
+  defp key_first(nodes, match?, apply_key) do
+    {keyed, _done?} =
+      Enum.map_reduce(nodes, false, fn
+        node, false -> if match?.(node), do: {apply_key.(node), true}, else: {node, false}
+        node, true -> {node, true}
+      end)
+
+    keyed
+  end
+
+  defp put_component_key({:component, module, props, children} = node, key) do
+    if List.keymember?(props, "cid", 0) do
+      node
+    else
+      {:component, module, [{"__key__", [expression: {key}]} | props], children}
+    end
+  end
+
+  defp put_element_key({:element, tag, attrs, children} = node, key) do
+    if List.keymember?(attrs, "data-key", 0) do
+      node
+    else
+      {:element, tag, [{"data-key", [expression: {key}]} | attrs], children}
+    end
+  end
+
   defp extract_expression_content(expr_str) do
     expr_str
     |> String.slice(1, String.length(expr_str) - 2)
@@ -102,12 +227,31 @@ defmodule Hologram.Template.DOM do
     "] else ["
   end
 
+  # A comprehension may name the identity of what it repeats:
+  #
+  #     {%for row <- rows, key: row.msg.id}
+  #
+  # and when it doesn't, the item's `:id` is used — which covers nearly every list in a Hologram app,
+  # since records carry one. The key reaches the iteration's own node (see `key_nodes/2`): a component
+  # takes it as its identity, so its state and its memoized subtree follow the DATA across list
+  # mutations instead of its position; a plain element takes it as `data-key`, which is what the vnode
+  # keyer already reads. An item with no `:id` — an integer, a tuple, a projection map — stays
+  # unkeyed, exactly as it behaved before this existed.
+  #
+  # The wrapper is emitted unconditionally, with a nil key when there is nothing to key on, so that
+  # the opening and closing fragments stay symmetrical: `render_code/1` sees a block end with no
+  # memory of how its start was rendered.
   defp render_code({:block_start, {"for", expr_str}}) do
-    "(for #{extract_expression_content(expr_str)} do ["
+    {generator, key_code} =
+      expr_str
+      |> extract_expression_content()
+      |> split_key_option()
+
+    "(for #{generator} do Hologram.Template.DOM.key_nodes(#{key_code}, ["
   end
 
   defp render_code({:block_end, "for"}) do
-    "] end)"
+    "]) end)"
   end
 
   defp render_code({:block_start, {"if", expr_str}}) do

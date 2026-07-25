@@ -313,7 +313,9 @@ defmodule Hologram.Template.Renderer do
       |> Enum.reject(fn {_name, _type, opts} -> opts[:from_context] end)
       |> Enum.map(fn {name, _type, _opts} -> to_string(name) end)
 
-    allowed_prop_names = ["cid" | registered_prop_names]
+    # "__key__" is not a prop the component declares — it's the identity a keyed `{%for}` attached to
+    # this node (see DOM.key_nodes/2), consumed by inject_inferred_cid/3 and dropped before render.
+    allowed_prop_names = ["cid", "__key__" | registered_prop_names]
 
     Enum.filter(props_dom, fn {name, _value_dom} -> name in allowed_prop_names end)
   end
@@ -335,11 +337,18 @@ defmodule Hologram.Template.Renderer do
   #
   # An explicit `cid` prop still means exactly what it always did — a global name, unscoped — which is
   # the right shape for a singleton (`profile-card`) and keeps every existing call site untouched.
+  # Identity, in order of how specifically it was stated: an explicit `cid` prop (a global name), then
+  # a keyed `{%for}`'s key for this node, then the component's own `key/1`. The loop's key is dropped
+  # from the props either way — it is the framework's channel for identity, not something the
+  # component declared, and leaving it in would show up as an undeclared prop.
   defp inject_inferred_cid(props, module, parent_cid) do
-    if has_cid_prop?(props) or not Reflection.has_function?(module, :key, 1) do
-      props
-    else
-      Map.put(props, :cid, scope_cid(parent_cid, module.key(props)))
+    {key, props} = Map.pop(props, :__key__)
+
+    cond do
+      has_cid_prop?(props) -> props
+      not is_nil(key) -> Map.put(props, :cid, scope_cid(parent_cid, key))
+      Reflection.has_function?(module, :key, 1) -> Map.put(props, :cid, scope_cid(parent_cid, module.key(props)))
+      true -> props
     end
   end
 

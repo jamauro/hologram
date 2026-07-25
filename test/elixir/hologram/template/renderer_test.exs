@@ -70,6 +70,10 @@ defmodule Hologram.Template.RendererTest do
   alias Hologram.Test.Fixtures.Template.Renderer.Module84
   alias Hologram.Test.Fixtures.Template.Renderer.Module86
   alias Hologram.Test.Fixtures.Template.Renderer.Module87
+  alias Hologram.Test.Fixtures.Template.Renderer.Module88
+  alias Hologram.Test.Fixtures.Template.Renderer.Module90
+  alias Hologram.Test.Fixtures.Template.Renderer.Module91
+  alias Hologram.Test.Fixtures.Template.Renderer.Module92
   alias Hologram.Test.Fixtures.Template.Renderer.Module9
 
   @csrf_token "test-csrf-token"
@@ -551,6 +555,46 @@ defmodule Hologram.Template.RendererTest do
                "list-2/a",
                "list-2/b"
              ]
+    end
+
+    test "a keyed {%for} gives each repeated component its identity, implicitly from the item id" do
+      node =
+        {:component, Module88,
+         [{"cid", [text: "list"]}, {"items", [expression: {[%{id: "a"}, %{id: "b"}]}]}], []}
+
+      {html, registry, _server} = render_dom(node, @env, @server)
+
+      assert html == "<span>a</span><span>b</span>"
+      assert Enum.sort(Map.keys(registry)) == ["list", "list/a", "list/b"]
+    end
+
+    test "an explicit key: expression keys a repeated ELEMENT as data-key" do
+      node =
+        {:component, Module90,
+         [{"cid", [text: "list"]}, {"items", [expression: {[%{slug: "x"}, %{slug: "y"}]}]}], []}
+
+      {html, _registry, _server} = render_dom(node, @env, @server)
+
+      assert html == ~s(<div data-key="x">x</div><div data-key="y">y</div>)
+    end
+
+    test "items without an id stay unkeyed" do
+      node =
+        {:component, Module91, [{"cid", [text: "list"]}, {"items", [expression: {[1, 2]}]}], []}
+
+      {html, _registry, _server} = render_dom(node, @env, @server)
+
+      assert html == "<div>1</div><div>2</div>"
+    end
+
+    test "a comma or a key: inside the generator's own expression is not the loop's key option" do
+      node =
+        {:component, Module92,
+         [{"cid", [text: "list"]}, {"items", [expression: {[%{id: "a"}, %{id: "b"}]}]}], []}
+
+      {html, _registry, _server} = render_dom(node, @env, @server)
+
+      assert html == ~s(<div data-key="a">a</div><div data-key="b">b</div>)
     end
 
     test "an explicit cid prop wins over key/1 and stays unscoped" do
