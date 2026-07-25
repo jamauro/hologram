@@ -149,8 +149,18 @@ export default class Hologram {
   // raises where it always did rather than failing somewhere surprising.
   static #resolveActionTarget(target, name) {
     let cid = target;
+    const seen = new Set();
 
     while (cid !== null) {
+      const cidKey = Type.encodeMapKey(cid);
+
+      // Parentage is data the renderer writes; a cycle in it must not hang the page.
+      if (seen.has(cidKey)) {
+        break;
+      }
+
+      seen.add(cidKey);
+
       const module = ComponentRegistry.getComponentModule(cid);
 
       if (module === null) {
