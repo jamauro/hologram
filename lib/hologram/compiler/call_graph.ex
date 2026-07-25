@@ -865,6 +865,7 @@ defmodule Hologram.Compiler.CallGraph do
     layout_module = page_module.__layout_module__()
 
     [
+      {page_module, :__action_names__, 0},
       {page_module, :__layout_module__, 0},
       {page_module, :__layout_props__, 0},
       {page_module, :__params__, 0},
@@ -872,6 +873,7 @@ defmodule Hologram.Compiler.CallGraph do
       {page_module, :action, 3},
       {page_module, :resume, 1},
       {page_module, :template, 0},
+      {layout_module, :__action_names__, 0},
       {layout_module, :__props__, 0},
       {layout_module, :action, 3},
       {layout_module, :resume, 1},
@@ -1373,9 +1375,16 @@ defmodule Hologram.Compiler.CallGraph do
   # This is because we lack precise information about which specific component functions will be used.
   defp add_component_call_graph_edges(call_graph, module) do
     call_graph
+    # Enumerates the actions this module handles; the client dispatcher reads it to bubble an
+    # unhandled action up the component chain (see Hologram.executeAction).
+    |> add_edge(module, {module, :__action_names__, 0})
     |> add_edge(module, {module, :__props__, 0})
     |> add_edge(module, {module, :action, 3})
     |> add_edge(module, {module, :init, 2})
+    # Optional callback deriving a component's cid from its props. The client renderer calls it the
+    # same way it calls template/0, so it has to be reachable here to get transpiled at all (see
+    # Renderer's inject_inferred_cid/3).
+    |> add_edge(module, {module, :key, 1})
     |> add_edge(module, {module, :resume, 1})
     |> add_edge(module, {module, :template, 0})
   end

@@ -131,11 +131,36 @@ export default class Renderer {
   // the chain's SIBLINGS keep hitting. Correctness leans on renders being pure functions of
   // these inputs.
   //
-  // A hit must also RE-EMIT the subtree's collected side-band bindings (listener/reach/resize/
-  // intersect — reconcile drops anything not re-collected each render) — captured as array
-  // slices during the original render.
+  // A hit must also RE-EMIT the subtree's collected side-band bindings (listener/reach/resize —
+  // reconcile drops anything not re-collected each render) — captured as array slices during the
+  // original render.
+  //
+  // The cache is GC'd per render pass: #memoRendered collects every cid reached this pass and
+  // renderPage drops the rest. Without it the cache is append-only — a cid that leaves the page
+  // (destroyed, or gated out of the template) keeps its whole cached subtree alive forever, since
+  // put_destroy clears the ComponentRegistry entry but knows nothing about this cache. That leak is
+  // invisible while cids are fixed strings, and unbounded the moment they key on data (a cid per
+  // message row ⇒ one retained vdom tree per message ever scrolled past).
   static #memoCache = new Map();
+  static #memoRendered = new Set();
   static #memoStack = [];
+
+  // cidKey => the cid of the component that rendered it, or null at the root. Rebuilt as a
+  // by-product of rendering and pruned on the same schedule as #memoCache, so it always describes
+  // the live tree. Hologram.executeAction walks it to bubble an action that its target doesn't
+  // handle up to the nearest ancestor that does.
+  //
+  // This is the EVENT-ROUTING chain (the defaultTarget in scope), deliberately not the identity
+  // chain #injectInferredCid uses: the two differ at the page boundary, and here the page is exactly
+  // what a handler-bearing ancestor tends to be. The walk simply ends where parentage runs out,
+  // which is at the page — an action nothing in the chain handles is left on its original target so
+  // it raises there, exactly as it did before bubbling existed.
+  static #parentCids = new Map();
+
+  // The cid that rendered `cid`, or null if it is a root (or no longer rendered).
+  static parentCid(cid) {
+    return Renderer.#parentCids.get(Type.encodeMapKey(cid)) ?? null;
+  }
 
   // Reference-first structural equality: `===` short-circuits at EVERY level, so comparing a
   // fresh term that shares unchanged substructure (a rebuilt props map whose values came from
@@ -215,6 +240,7 @@ export default class Renderer {
     Renderer.reachBindings = [];
     Renderer.resizeBindings = [];
     Renderer.#memoStack = [];
+    Renderer.#memoRendered = new Set();
 
     const pageModuleProxy = Interpreter.moduleProxy(pageModule);
 
@@ -226,6 +252,21 @@ export default class Renderer {
       pageParams,
       pageComponentStruct,
     );
+
+    // Drop cached subtrees for cids this pass didn't reach (see #memoCache). Only runs on a render
+    // that completed — a throw mid-render leaves the cache untouched rather than pruning against a
+    // partial set. A hit re-registers its cid, so surviving entries are exactly the live tree.
+    for (const cidKey of Renderer.#memoCache.keys()) {
+      if (!Renderer.#memoRendered.has(cidKey)) {
+        Renderer.#memoCache.delete(cidKey);
+      }
+    }
+
+    for (const cidKey of Renderer.#parentCids.keys()) {
+      if (!Renderer.#memoRendered.has(cidKey)) {
+        Renderer.#parentCids.delete(cidKey);
+      }
+    }
 
     const htmlVnode = pageVdom.find((vnode) => vnode.sel === "html");
 
@@ -1043,6 +1084,34 @@ export default class Renderer {
     return "atom(cid)" in props.data;
   }
 
+  // Based on inject_inferred_cid/3 — see the Elixir renderer for the rationale. MUST stay in lockstep
+  // with it: the server renders the SSR'd ComponentRegistry from its resolution and the client hydrates
+  // against that, so any divergence in the resolved cid shows up as a component that re-inits (losing
+  // its SSR state) on boot.
+  //
+  // The scope is the NEAREST ENCLOSING STATEFUL COMPONENT, read off #memoStack's innermost frame —
+  // which is precisely what that stack tracks, since a frame is pushed around each stateful
+  // component's own template render. Deliberately NOT `defaultTarget`: that is the event-routing
+  // target, and the two part ways at the page boundary (renderDom's "page" case retargets events to
+  // the page, while the Elixir renderer has no page node and keeps the layout as the enclosing
+  // component). Identity must agree with the server exactly; event routing is resolved client-side
+  // only, so it is free to differ.
+  static #injectInferredCid(props, moduleProxy) {
+    if (Renderer.#hasCidProp(props) || !("key/1" in moduleProxy)) {
+      return props;
+    }
+
+    const key = Renderer.toBitstring(moduleProxy["key/1"](props));
+    const scope = Renderer.#memoStack.at(-1)?.cid ?? null;
+
+    const cid =
+      scope === null
+        ? key
+        : Bitstring.concat([scope, Type.bitstring("/"), key]);
+
+    return Erlang_Maps["put/3"](Type.atom("cid"), cid, props);
+  }
+
   // Based on inject_default_prop_values/2
   // Deps: [:lists.keyfind/3, :lists.keymember/3, :maps.is_key/2]
   static #injectDefaultPropValues(props, moduleProxy) {
@@ -1438,6 +1507,7 @@ export default class Renderer {
     );
 
     props = Renderer.#injectDefaultPropValues(props, moduleProxy);
+    props = Renderer.#injectInferredCid(props, moduleProxy);
 
     if (Renderer.#hasCidProp(props)) {
       return Renderer.#renderStatefulComponent(
@@ -1446,6 +1516,7 @@ export default class Renderer {
         expandedChildrenDom,
         context,
         parentTagName,
+        defaultTarget,
       );
     } else {
       return Renderer.#renderTemplate(
@@ -1807,15 +1878,24 @@ export default class Renderer {
     childrenDom,
     context,
     parentTagName,
+    parentCid = null,
   ) {
     const cid = Erlang_Maps["get/2"](Type.atom("cid"), props);
 
     const [componentState, componentEmittedContext] =
       Renderer.#maybeInitComponent(cid, moduleProxy, props);
 
+    Renderer.#parentCids.set(Type.encodeMapKey(cid), parentCid);
+
     // PATCH (memo-subtrees) — see the notes above renderPage. Unchanged inputs ⇒ return the
     // previous render's exact vnode objects (snabbdom then skips the whole subtree by identity).
     const cidKey = Type.encodeMapKey(cid);
+
+    // Reached this pass — keeps renderPage's prune from dropping it, on the hit path as well as the
+    // miss path (a hit never re-populates the cache, so registering only on a miss would evict every
+    // memoized subtree on the very next render).
+    Renderer.#memoRendered.add(cidKey);
+
     const entry = Renderer.#memoCache.get(cidKey);
 
     if (
@@ -1834,6 +1914,14 @@ export default class Renderer {
       Renderer.intersectBindings.push(...entry.bindings.intersect);
 
       ComponentRegistry.putComponentContext(cid, entry.mergedContext);
+
+      // A hit renders no descendants, so nothing below would register itself as reached and
+      // renderPage's prune would drop the cache of every component under a hit — leaving the next
+      // MISS on this component to rebuild its whole subtree from scratch. The entry's descendant set
+      // is transitive, so re-registering it here keeps the live tree intact.
+      for (const descendant of entry.descendants) {
+        Renderer.#memoRendered.add(Type.encodeMapKey(descendant.cid));
+      }
 
       Renderer.#memoRegisterInAncestors(
         {
@@ -1859,6 +1947,8 @@ export default class Renderer {
     ComponentRegistry.putComponentContext(cid, mergedContext);
 
     const frame = {
+      // The scope an inferred-cid child resolves against (see #injectInferredCid).
+      cid,
       descendants: [],
       marks: {
         listener: Renderer.listenerBindings.length,

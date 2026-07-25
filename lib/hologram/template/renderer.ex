@@ -17,9 +17,10 @@ defmodule Hologram.Template.Renderer do
   defmodule Env do
     @moduledoc false
 
-    defstruct context: %{}, node_type: nil, slots: [], tag_name: nil
+    defstruct cid: nil, context: %{}, node_type: nil, slots: [], tag_name: nil
 
     @type t :: %__MODULE__{
+            cid: String.t() | nil,
             context: %{(atom | {any, atom}) => any},
             node_type: :attribute | :element | :property | :public_comment | nil,
             slots: keyword(DOM.t()),
@@ -82,11 +83,19 @@ defmodule Hologram.Template.Renderer do
       |> cast_props(module)
       |> inject_props_from_context(module, env.context)
       |> inject_default_prop_values(module)
+      |> inject_inferred_cid(module, env.cid)
 
     if has_cid_prop?(props) do
       render_stateful_component(module, props, expanded_children_dom, env.context, server_struct)
     else
-      render_template(module, props, expanded_children_dom, env.context, server_struct)
+      render_template(
+        module,
+        props,
+        expanded_children_dom,
+        env.context,
+        env.cid,
+        server_struct
+      )
     end
   end
 
@@ -446,6 +455,30 @@ defmodule Hologram.Template.Renderer do
     Enum.any?(props, fn {name, _value} -> name == :cid end)
   end
 
+  # A component rendered in a loop shouldn't have to spell out a globally unique cid at every call
+  # site: it can define `key/1` and derive its identity from its own props instead
+  # (`def key(props), do: props.row.msg.id`), leaving the call site as `<MessageItem row={row} />`.
+  #
+  # The key only has to be unique among ONE parent's children, because the resolved cid is scoped by
+  # the enclosing stateful component ("list-general/msg-abc"). That scoping is what makes the same
+  # record renderable in two places at once: a message showing in both a channel pane and an open
+  # thread pane gets two cids, hence two component instances — two views of one shared record, which
+  # is what mirroring actually needs. A flat namespace would instead alias them onto one registry
+  # entry and one memoized vdom, and a vnode reused in two tree positions has one `.elm` to give.
+  #
+  # An explicit `cid` prop still means exactly what it always did — a global name, unscoped — which is
+  # the right shape for a singleton (`profile-card`) and keeps every existing call site untouched.
+  defp inject_inferred_cid(props, module, parent_cid) do
+    if has_cid_prop?(props) or not Reflection.has_function?(module, :key, 1) do
+      props
+    else
+      Map.put(props, :cid, scope_cid(parent_cid, module.key(props)))
+    end
+  end
+
+  defp scope_cid(nil, key), do: to_string(key)
+  defp scope_cid(parent_cid, key), do: parent_cid <> "/" <> to_string(key)
+
   defp init_component(module, props, server_struct) do
     init_result =
       if Reflection.has_function?(module, :init, 3) do
@@ -649,7 +682,14 @@ defmodule Hologram.Template.Renderer do
     merged_context = Map.merge(context, component_struct.emitted_context)
 
     {html, children_component_registry, final_server_struct} =
-      render_template(module, vars, children_dom, merged_context, mutated_server_struct)
+      render_template(
+        module,
+        vars,
+        children_dom,
+        merged_context,
+        vars.cid,
+        mutated_server_struct
+      )
 
     component_registry =
       Map.put(children_component_registry, vars.cid, %{module: module, struct: component_struct})
@@ -657,10 +697,17 @@ defmodule Hologram.Template.Renderer do
     {html, component_registry, final_server_struct}
   end
 
-  defp render_template(module, vars, children_dom, context, server_struct) do
+  # `cid` is the enclosing stateful component's cid — the scope an inferred `key/1` resolves against
+  # (see inject_inferred_cid/3). A stateless component passes its own parent's scope straight through,
+  # since it isn't a component instance itself; that matches the client renderer, where the same value
+  # doubles as `defaultTarget`.
+  defp render_template(module, vars, children_dom, context, cid, server_struct) do
     vars
     |> module.template().()
-    |> render_dom(%Env{context: context, slots: [default: children_dom]}, server_struct)
+    |> render_dom(
+      %Env{cid: cid, context: context, slots: [default: children_dom]},
+      server_struct
+    )
   end
 
   defp spread_entries(value)

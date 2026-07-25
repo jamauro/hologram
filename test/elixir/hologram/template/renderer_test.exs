@@ -70,6 +70,8 @@ defmodule Hologram.Template.RendererTest do
   alias Hologram.Test.Fixtures.Template.Renderer.Module84
   alias Hologram.Test.Fixtures.Template.Renderer.Module86
   alias Hologram.Test.Fixtures.Template.Renderer.Module87
+  alias Hologram.Test.Fixtures.Template.Renderer.Module88
+  alias Hologram.Test.Fixtures.Template.Renderer.Module89
   alias Hologram.Test.Fixtures.Template.Renderer.Module9
 
   @csrf_token "test-csrf-token"
@@ -975,6 +977,56 @@ defmodule Hologram.Template.RendererTest do
       assert_raise KeyError, expected_msg, fn ->
         render_dom(node, @env, @server)
       end
+    end
+  end
+
+  describe "inferred cid (key/1)" do
+    test "a component defining key/1 is stateful without a cid prop at the call site" do
+      node = {:component, Module88, [{"row", [expression: {%{id: "abc"}}]}], []}
+
+      assert render_dom(node, @env, @server) ==
+               {"<div>row = abc</div>",
+                %{"abc" => %{module: Module88, struct: %Component{state: %{}}}}, @server}
+    end
+
+    test "the inferred cid is scoped by the enclosing stateful component" do
+      node = {:component, Module89, [{"cid", [text: "parent"]}], []}
+
+      {html, registry, _server} = render_dom(node, @env, @server)
+
+      assert html == "<div>\n  <div>row = a</div>\n  <div>row = b</div>\n</div>"
+
+      assert Map.keys(registry) |> Enum.sort() == ["parent", "parent/a", "parent/b"]
+    end
+
+    test "the same key under two different parents resolves to two distinct components" do
+      node =
+        {:element, "div", [],
+         [
+           {:component, Module89, [{"cid", [text: "list-1"]}], []},
+           {:component, Module89, [{"cid", [text: "list-2"]}], []}
+         ]}
+
+      {_html, registry, _server} = render_dom(node, @env, @server)
+
+      assert Map.keys(registry) |> Enum.sort() == [
+               "list-1",
+               "list-1/a",
+               "list-1/b",
+               "list-2",
+               "list-2/a",
+               "list-2/b"
+             ]
+    end
+
+    test "an explicit cid prop wins over key/1 and stays unscoped" do
+      node =
+        {:component, Module88,
+         [{"cid", [text: "spelled-out"]}, {"row", [expression: {%{id: "a"}}]}], []}
+
+      assert render_dom(node, @env, @server) ==
+               {"<div>row = a</div>",
+                %{"spelled-out" => %{module: Module88, struct: %Component{state: %{}}}}, @server}
     end
   end
 

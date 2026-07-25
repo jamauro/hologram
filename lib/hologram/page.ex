@@ -51,6 +51,9 @@ defmodule Hologram.Page do
         alias Hologram.Page
 
         @before_compile Page
+        @on_definition {Component, :__on_definition__}
+
+        Module.register_attribute(__MODULE__, :__action_names__, accumulate: true)
 
         @external_resource unquote(template_path)
 
@@ -87,7 +90,7 @@ defmodule Hologram.Page do
         def __params__, do: Enum.reverse(@__params__)
       end
 
-    [template_clause, params_clause]
+    [template_clause, params_clause, Component.build_action_names_clause(env)]
   end
 
   @doc """

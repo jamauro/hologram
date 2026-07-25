@@ -143,6 +143,54 @@ export default class Hologram {
   // "unhandledrejection" event listener in #init().
   // TODO: make private (tested implicitely in feature tests)
   // Deps: [:maps.get/2]
+  // PATCH (action bubbling) — an action runs on the nearest component, from `target` upward, that
+  // actually handles it. Without this a component can only dispatch to a handler by NAMING the cid
+  // that owns it, which means plumbing that cid down as a prop to every component that fires the
+  // event — and re-plumbing it whenever a new component is inserted in between (extracting a list
+  // component out of a pane silently moves "the closest stateful ancestor" one level down).
+  //
+  // Nearest handler wins, exactly like DOM event handling: the walk stops at the first component
+  // whose __action_names__ covers the name, so a child that defines :close keeps its own :close.
+  // If nothing in the chain handles it the ORIGINAL target is returned unchanged, so the dispatch
+  // raises where it always did rather than failing somewhere surprising.
+  static #resolveActionTarget(target, name) {
+    let cid = target;
+
+    while (cid !== null) {
+      const module = ComponentRegistry.getComponentModule(cid);
+
+      if (module === null) {
+        break;
+      }
+
+      if (Hologram.#handlesAction(module, name)) {
+        return cid;
+      }
+
+      cid = Renderer.parentCid(cid);
+    }
+
+    return target;
+  }
+
+  static #handlesAction(module, name) {
+    const moduleProxy = Interpreter.moduleProxy(module);
+
+    // A module compiled before this existed claims everything, which reproduces the pre-bubbling
+    // behaviour (dispatch lands on the given target, handled or not).
+    if (!("__action_names__/0" in moduleProxy)) {
+      return true;
+    }
+
+    const actionNames = moduleProxy["__action_names__/0"]();
+
+    if (Type.isAtom(actionNames)) {
+      return actionNames.value === "any";
+    }
+
+    return actionNames.data.some((actionName) => actionName.value === name.value);
+  }
+
   static executeAction(action) {
     const startTime = performance.now();
     // PATCH (profiling-opt-in) — upstream enables per-function profiling for EVERY dispatch,
@@ -156,7 +204,11 @@ export default class Hologram {
 
     const name = Erlang_Maps["get/2"](Type.atom("name"), action);
     const params = Erlang_Maps["get/2"](Type.atom("params"), action);
-    const target = Erlang_Maps["get/2"](Type.atom("target"), action);
+
+    const target = Hologram.#resolveActionTarget(
+      Erlang_Maps["get/2"](Type.atom("target"), action),
+      name,
+    );
 
     const componentModule = ComponentRegistry.getComponentModule(target);
 
