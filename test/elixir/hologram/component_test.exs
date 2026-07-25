@@ -16,6 +16,7 @@ defmodule Hologram.ComponentTest do
   alias Hologram.Test.Fixtures.Component.Module5
   alias Hologram.Test.Fixtures.Component.Module7
   alias Hologram.Test.Fixtures.Component.Module8
+  alias Hologram.Test.Fixtures.Component.Module9
 
   @server %Server{cid: "page"}
 
@@ -83,8 +84,17 @@ defmodule Hologram.ComponentTest do
   end
 
   describe "init/2" do
-    test "no default implementation" do
-      refute Reflection.has_function?(Module1, :init, 2)
+    test "default implementation returns the component unchanged" do
+      # The docs promise both init callbacks are optional. Without this default, a component with no
+      # init at all renders on the server but throws the moment it is created client-side instead of
+      # hydrated — see Component.build_init_2_clause/1.
+      assert Module1.init(%{a: 1}, build_component_struct()) == build_component_struct()
+    end
+
+    test "NOT defaulted when the component defines its own init/3" do
+      # Server-side setup can't be reproduced on the client, so those must keep raising there rather
+      # than silently starting from empty state.
+      refute Reflection.has_function?(Module9, :init, 2)
     end
 
     test "overridden implementation" do
