@@ -1508,8 +1508,26 @@ defmodule Hologram.Template.DOMTest do
                      {{:., [line: 1], [{:vars, [line: 1], nil}, :items]},
                       [no_parens: true, line: 1], []}
                    ]},
-                  [do: {:__block__, [], [[text: "abc"]]}]
-                ]},
+                  [
+                    do:
+                      {:__block__, [],
+                       [
+                         {{:., [line: 1],
+                           [
+                             {:__aliases__, [line: 1], [:Hologram, :Template, :DOM]},
+                             :key_nodes
+                           ]}, [line: 1],
+                          [
+                            {{:., [line: 1],
+                              [
+                                {:__aliases__, [line: 1], [:Hologram, :Template, :DOM]},
+                                :default_key
+                              ]}, [line: 1], [{:item, [line: 1], nil}]},
+                            [text: "abc"]
+                          ]}
+                       ]}
+                  ]
+                ]}
                {:public_comment, [text: "[h:2789se:0:c]"]}
              ]
     end
@@ -1536,7 +1554,21 @@ defmodule Hologram.Template.DOMTest do
                   [
                     do:
                       {:__block__, [],
-                       [[{:text, "abc"}, {:{}, [line: 1], [:element, "div", [], []]}]]}
+                       [
+                         {{:., [line: 1],
+                           [
+                             {:__aliases__, [line: 1], [:Hologram, :Template, :DOM]},
+                             :key_nodes
+                           ]}, [line: 1],
+                          [
+                            {{:., [line: 1],
+                              [
+                                {:__aliases__, [line: 1], [:Hologram, :Template, :DOM]},
+                                :default_key
+                              ]}, [line: 1], [{:item, [line: 1], nil}]},
+                            [{:text, "abc"}, {:{}, [line: 1], [:element, "div", [], []]}]
+                          ]}
+                       ]}
                   ]
                 ]},
                {:public_comment, [text: "[h:2rfi1c:0:c]"]}

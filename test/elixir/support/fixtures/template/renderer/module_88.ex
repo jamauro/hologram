@@ -1,18 +1,19 @@
 defmodule Hologram.Test.Fixtures.Template.Renderer.Module88 do
   @moduledoc """
-  Infers its cid from its props via key/1 instead of taking one at the call site.
+  Renders keyed children from a `{%for}` — no `cid` at the call site and no `key/1` of its own, so the
+  identity comes entirely from the loop (implicitly, off each item's `:id`).
   """
 
   use Hologram.Component
 
-  prop :row, :map
+  alias Hologram.Test.Fixtures.Template.Renderer.Module89
 
-  def key(props), do: props.row.id
+  prop :items, :list
 
   @impl Component
   def template do
     ~HOLO"""
-    <div>row = {@row.id}</div>
+    {%for item <- @items}<Module89 item={item} />{/for}
     """
   end
 end

@@ -1062,7 +1062,12 @@ export default class Renderer {
       .data.filter((prop) => Renderer.#contextKey(prop.data[2]) === null)
       .map((prop) => $.toBitstring(prop.data[0]));
 
-    const allowedPropNames = registeredPropNames.concat(Type.bitstring("cid"));
+    // "__key__" is not a declared prop — it's the identity a keyed {%for} attached to this node
+    // (see DOM.key_nodes/2), consumed by #injectInferredCid and dropped before render.
+    const allowedPropNames = registeredPropNames.concat(
+      Type.bitstring("cid"),
+      Type.bitstring("__key__"),
+    );
 
     return propDoms.filter((propDom) =>
       allowedPropNames.some((name) =>
@@ -1096,12 +1101,35 @@ export default class Renderer {
   // the page, while the Elixir renderer has no page node and keeps the layout as the enclosing
   // component). Identity must agree with the server exactly; event routing is resolved client-side
   // only, so it is free to differ.
+  // Identity, in order of how specifically it was stated: an explicit cid prop, then a keyed {%for}'s
+  // key for this node, then the component's own key/1. The loop's key is dropped from the props
+  // either way — it is the framework's channel for identity, not something the component declared.
   static #injectInferredCid(props, moduleProxy) {
-    if (Renderer.#hasCidProp(props) || !("key/1" in moduleProxy)) {
+    const loopKey = Erlang_Maps["get/3"](
+      Type.atom("__key__"),
+      props,
+      Type.nil(),
+    );
+
+    if (!Type.isNil(loopKey)) {
+      props = Erlang_Maps["remove/2"](Type.atom("__key__"), props);
+    }
+
+    if (Renderer.#hasCidProp(props)) {
       return props;
     }
 
-    const key = Renderer.toBitstring(moduleProxy["key/1"](props));
+    const rawKey = Type.isNil(loopKey)
+      ? "key/1" in moduleProxy
+        ? moduleProxy["key/1"](props)
+        : null
+      : loopKey;
+
+    if (rawKey === null) {
+      return props;
+    }
+
+    const key = Renderer.toBitstring(rawKey);
     const scope = Renderer.#memoStack.at(-1)?.cid ?? null;
 
     const cid =
