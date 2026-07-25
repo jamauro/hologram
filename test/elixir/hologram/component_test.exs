@@ -14,11 +14,27 @@ defmodule Hologram.ComponentTest do
   alias Hologram.Test.Fixtures.Component.Module3
   alias Hologram.Test.Fixtures.Component.Module4
   alias Hologram.Test.Fixtures.Component.Module5
+  alias Hologram.Test.Fixtures.Component.Module7
+  alias Hologram.Test.Fixtures.Component.Module8
 
   @server %Server{cid: "page"}
 
   test "__is_hologram_component__/0" do
     assert Module1.__is_hologram_component__()
+  end
+
+  describe "__action_names__/0" do
+    test "lists the handled action names, sorted and deduplicated" do
+      assert Module7.__action_names__() == [:my_action_a, :my_action_b]
+    end
+
+    test "a catch-all clause claims every action name" do
+      assert Module8.__action_names__() == :any
+    end
+
+    test "a component with no action/3 clause handles nothing" do
+      assert Module4.__action_names__() == []
+    end
   end
 
   test "__props__/0" do

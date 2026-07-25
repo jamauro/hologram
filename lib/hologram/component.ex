@@ -122,6 +122,9 @@ defmodule Hologram.Component do
         alias Hologram.Component.Command
 
         @before_compile Component
+        @on_definition {Component, :__on_definition__}
+
+        Module.register_attribute(__MODULE__, :__action_names__, accumulate: true)
 
         @external_resource unquote(template_path)
 
@@ -166,7 +169,47 @@ defmodule Hologram.Component do
         def __props__, do: Enum.reverse(@__props__)
       end
 
-    [template_clause, props_clause]
+    [template_clause, props_clause, build_action_names_clause(env)]
+  end
+
+  @doc """
+  Accumulates the action names a component handles, so `__action_names__/0` can answer "does this
+  component handle `:foo`?" without calling it. See `build_action_names_clause/1`.
+  """
+  @spec __on_definition__(Macro.Env.t(), atom, atom, list, list, list | nil) :: :ok
+  def __on_definition__(env, _kind, :action, [name_ast | _rest] = args, _guards, _body)
+      when length(args) == 3 do
+    # A literal atom pattern IS the atom in AST form; anything else (a variable, `_`, a map pattern)
+    # matches action names this can't enumerate, so the module claims all of them.
+    name = if is_atom(name_ast), do: name_ast, else: :any
+
+    Module.put_attribute(env.module, :__action_names__, name)
+  end
+
+  def __on_definition__(_env, _kind, _name, _args, _guards, _body), do: :ok
+
+  @doc """
+  Builds the `__action_names__/0` clause: the sorted list of action names the module handles, or
+  `:any` if it has a clause whose first argument isn't a literal atom.
+
+  The client dispatcher reads it to bubble an action its target doesn't handle up to the nearest
+  ancestor that does, which is what lets a deeply nested component dispatch without naming the cid
+  of the component that owns the handler.
+  """
+  @spec build_action_names_clause(Macro.Env.t()) :: Macro.t()
+  def build_action_names_clause(env) do
+    names = Module.get_attribute(env.module, :__action_names__) || []
+
+    action_names =
+      if :any in names, do: :any, else: names |> Enum.uniq() |> Enum.sort()
+
+    quote do
+      @doc """
+      Returns the action names this component handles, or `:any` for a catch-all clause.
+      """
+      @spec __action_names__() :: [atom] | :any
+      def __action_names__, do: unquote(Macro.escape(action_names))
+    end
   end
 
   @doc """

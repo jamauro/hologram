@@ -794,14 +794,18 @@ defmodule Hologram.Compiler.CallGraphTest do
 
   test "list_page_entry_mfas/1" do
     assert list_page_entry_mfas(Module19) == [
+             {Module19, :__action_names__, 0},
              {Module19, :__layout_module__, 0},
              {Module19, :__layout_props__, 0},
              {Module19, :__params__, 0},
              {Module19, :__route__, 0},
              {Module19, :action, 3},
+             {Module19, :resume, 1},
              {Module19, :template, 0},
+             {Module20, :__action_names__, 0},
              {Module20, :__props__, 0},
              {Module20, :action, 3},
+             {Module20, :resume, 1},
              {Module20, :template, 0}
            ]
   end
@@ -832,15 +836,19 @@ defmodule Hologram.Compiler.CallGraphTest do
       assert result == [
                {Enum, :reverse, 1},
                {Enum, :to_list, 1},
+               {Module14, :__action_names__, 0},
                {Module14, :__layout_module__, 0},
                {Module14, :__layout_props__, 0},
                {Module14, :__params__, 0},
                {Module14, :__route__, 0},
                {Module14, :action, 3},
                {Module14, :template, 0},
+               {Module15, :__action_names__, 0},
                {Module15, :__props__, 0},
                {Module15, :action, 3},
                {Module15, :init, 2},
+               {Module15, :key, 1},
+               {Module15, :resume, 1},
                {Module15, :template, 0},
                {Module16, :my_fun_16a, 2},
                {Kernel, :inspect, 1},

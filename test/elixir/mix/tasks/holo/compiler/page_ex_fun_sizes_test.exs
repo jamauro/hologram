@@ -23,13 +23,17 @@ defmodule Mix.Tasks.Holo.Compiler.PageExFunSizesTest do
           :__layout_module__, 0\}, [[:alnum:]]+\},
         \{\{Hologram\.Test\.Fixtures\.Mix\.Tasks\.Holo\.Compiler\.PageExFunSizes\.Module1,
           :__params__, 0\}, [[:alnum:]]+\},
+        \{\{Hologram\.Test\.Fixtures\.LayoutFixture, :resume, 1\}, [[:alnum:]]+\},
+        \{\{Hologram\.Test\.Fixtures\.Mix\.Tasks\.Holo\.Compiler\.PageExFunSizes\.Module1,
+          :__action_names__, 0\}, [[:alnum:]]+\},
         \{\{Hologram\.Test\.Fixtures\.Mix\.Tasks\.Holo\.Compiler\.PageExFunSizes\.Module1,
           :__layout_props__, 0\}, [[:alnum:]]+\},
         \{\{Hologram\.Test\.Fixtures\.Mix\.Tasks\.Holo\.Compiler\.PageExFunSizes\.Module1,
           :fun_1, 0\}, [[:alnum:]]+\},
         \{\{Hologram\.Test\.Fixtures\.Mix\.Tasks\.Holo\.Compiler\.PageExFunSizes\.Module1,
           :fun_2, 0\}, [[:alnum:]]+\},
-        \{\{Hologram\.Test\.Fixtures\.LayoutFixture, :__props__, 0\}, [[:alnum:]]+\}
+        \{\{Hologram\.Test\.Fixtures\.LayoutFixture, :__props__, 0\}, [[:alnum:]]+\},
+        \{\{Hologram\.Test\.Fixtures\.LayoutFixture, :__action_names__, 0\}, [[:alnum:]]+\}
       \]
       """)
 
