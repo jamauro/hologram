@@ -122,7 +122,6 @@ defmodule Hologram.Component do
         alias Hologram.Component.Command
 
         @before_compile Component
-        @on_definition {Component, :__on_definition__}
 
         Module.register_attribute(__MODULE__, :__action_names__, accumulate: true)
 
@@ -151,6 +150,13 @@ defmodule Hologram.Component do
         def resume(component), do: component
 
         defoverridable resume: 1
+
+        # Registered AFTER the defaults above ON PURPOSE: an @on_definition hook only sees
+        # definitions that follow it, so everything it records is the component author's own code.
+        # `__before_compile__` relies on that to tell "this module defines init/3" (server-side
+        # initialization, which the client cannot reproduce) from "this module inherited the default
+        # one above".
+        @on_definition {Component, :__on_definition__}
       end,
       maybe_register_colocated_template_markup(template_path),
       register_props_accumulator()
@@ -169,7 +175,32 @@ defmodule Hologram.Component do
         def __props__, do: Enum.reverse(@__props__)
       end
 
-    [template_clause, props_clause, build_action_names_clause(env)]
+    [template_clause, props_clause, build_action_names_clause(env), build_init_2_clause(env)]
+  end
+
+  # The docs promise that BOTH init callbacks are optional ("Hologram provides default
+  # implementations"), but only init/3 has ever had a default — so a component with no init at all
+  # renders fine on the server (where a missing init means an empty Component struct) and then throws
+  # "is initialized on the client, but doesn't have init/2 implemented" the first time it is created
+  # client-side rather than hydrated. That bites any component whose state is incidental, which is
+  # exactly what a keyed list row is.
+  #
+  # The gate is the point. A module that defines its OWN init/3 is doing server-side setup the client
+  # cannot reproduce — session, cookies, a DB read — and quietly handing it an empty struct would make
+  # its state depend on where it happened to be first rendered. Those keep raising, loudly. Only a
+  # component that never asked for initialization gets the default, whose behaviour then matches the
+  # server's for the same module: an untouched Component struct.
+  @spec build_init_2_clause(Macro.Env.t()) :: Macro.t()
+  def build_init_2_clause(env) do
+    if Module.defines?(env.module, {:init, 2}) or Module.get_attribute(env.module, :__own_init_3__) do
+      quote do
+      end
+    else
+      quote do
+        @impl Component
+        def init(_props, component), do: component
+      end
+    end
   end
 
   @doc """
@@ -177,6 +208,10 @@ defmodule Hologram.Component do
   component handle `:foo`?" without calling it. See `build_action_names_clause/1`.
   """
   @spec __on_definition__(Macro.Env.t(), atom, atom, list, list, list | nil) :: :ok
+  def __on_definition__(env, _kind, :init, args, _guards, _body) when length(args) == 3 do
+    Module.put_attribute(env.module, :__own_init_3__, true)
+  end
+
   def __on_definition__(env, _kind, :action, [name_ast | _rest] = args, _guards, _body)
       when length(args) == 3 do
     # A literal atom pattern IS the atom in AST form; anything else (a variable, `_`, a map pattern)
