@@ -378,7 +378,6 @@ export default class Renderer {
         entry.parentTagName,
         componentState,
         componentEmittedContext,
-        entry.rawProps,
       );
     } catch (error) {
       Renderer.listenerBindings = saved.listener;
@@ -768,77 +767,6 @@ export default class Renderer {
 
   // Based on cast_props/2
   // Deps: [:maps.from_list/1]
-  // The fast path for an item of a keyed {%for}: its identity is written at the call site (the
-  // __key__ the loop stamped), so the cid — and with it the cached render — can be found without
-  // resolving anything. Returns the cached vdom, or null to fall through to the full path.
-  //
-  // Only keyed items. A component with an explicit cid is a singleton, rendered once per pass,
-  // where none of this repetition exists; and an unkeyed one has no identity to look up.
-  static #cachedKeyedComponent(rawProps, context, childrenDom, parentTagName) {
-    const loopKey = Erlang_Maps["get/3"](
-      Type.atom("__key__"),
-      rawProps,
-      Type.nil(),
-    );
-
-    if (Type.isNil(loopKey)) {
-      return null;
-    }
-
-    const enclosing = Renderer.#memoStack.at(-1);
-
-    if (!enclosing) {
-      return null;
-    }
-
-    // The cid is a bitstring built by concatenation; building it per item, per render, allocates
-    // for a value that only depends on (scope, key). Keep the built one.
-    const scopeKey = Type.encodeMapKey(enclosing.cid);
-    const lookupKey = scopeKey + "/" + Type.encodeMapKey(loopKey);
-
-    let cid = Renderer.#keyedCids.get(lookupKey);
-
-    if (cid === undefined) {
-      cid = Bitstring.concat([
-        enclosing.cid,
-        Type.bitstring("/"),
-        Renderer.toBitstring(loopKey),
-      ]);
-
-      Renderer.#keyedCids.set(lookupKey, cid);
-    }
-
-    const cidKey = Type.encodeMapKey(cid);
-    const entry = Renderer.#memoCache.get(cidKey);
-
-    if (
-      !entry ||
-      entry.rawProps === undefined ||
-      entry.parentTagName !== parentTagName ||
-      !Renderer.#subtreeFresh(cidKey, entry) ||
-      !Renderer.#memoEq(entry.rawProps, rawProps) ||
-      !Renderer.#memoEq(entry.context, context) ||
-      !Renderer.#memoEq(entry.childrenDom, childrenDom) ||
-      ComponentRegistry.getComponentState(cid) !== entry.state ||
-      ComponentRegistry.getComponentEmittedContext(cid) !== entry.emittedContext
-    ) {
-      return null;
-    }
-
-    enclosing.children.add(cidKey);
-    Renderer.#renderParents.set(cidKey, scopeKey);
-
-    Renderer.listenerBindings.push(...entry.bindings.listener);
-    Renderer.reachBindings.push(...entry.bindings.reach);
-    Renderer.resizeBindings.push(...entry.bindings.resize);
-
-    ComponentRegistry.putComponentContext(cid, entry.mergedContext);
-
-    return entry.vdom;
-  }
-
-  static #keyedCids = new Map();
-
   static #castProps(propsDom, moduleProxy) {
     const propsTuples = Renderer.#filterAllowedProps(propsDom, moduleProxy)
       .map((propDom) => Renderer.#evalutatePropValue(propDom))
@@ -1605,29 +1533,12 @@ export default class Renderer {
     let childrenDom = dom.data[3];
 
     const expandedChildrenDom = Renderer.#expandSlots(childrenDom, slots);
-    const rawProps = Renderer.#castProps(propsDom, moduleProxy);
 
-    // PATCH (raw-prop short-circuit) — decide "unchanged" from what the CALL SITE wrote, before
-    // resolving it.
-    //
-    // Resolved props are a pure function of (raw props, context, module), so identical raw props
-    // under an identical context give identical resolved props: a strictly cheaper sufficient
-    // condition for the memo hit that was already going to happen. Everything between here and that
-    // check — injecting context props, filling defaults, building the cid, re-reading the registry,
-    // merging state — is work spent to reach a conclusion the raw values already imply, and in a
-    // keyed list it is spent once per item on every render.
-    const cached = Renderer.#cachedKeyedComponent(
-      rawProps,
+    let props = Renderer.#injectPropsFromContext(
+      Renderer.#castProps(propsDom, moduleProxy),
+      moduleProxy,
       context,
-      expandedChildrenDom,
-      parentTagName,
     );
-
-    if (cached !== null) {
-      return cached;
-    }
-
-    let props = Renderer.#injectPropsFromContext(rawProps, moduleProxy, context);
 
     props = Renderer.#injectDefaultPropValues(props, moduleProxy);
     props = Renderer.#injectInferredCid(props, moduleProxy);
@@ -1640,7 +1551,6 @@ export default class Renderer {
         context,
         parentTagName,
         defaultTarget,
-        rawProps,
       );
     } else {
       return Renderer.#renderTemplate(
@@ -1952,7 +1862,6 @@ export default class Renderer {
     context,
     parentTagName,
     parentCid = null,
-    rawProps = null,
   ) {
     const cid = Erlang_Maps["get/2"](Type.atom("cid"), props);
 
@@ -2018,7 +1927,6 @@ export default class Renderer {
       parentTagName,
       componentState,
       componentEmittedContext,
-      rawProps,
     );
   }
 
@@ -2035,7 +1943,6 @@ export default class Renderer {
     parentTagName,
     componentState,
     componentEmittedContext,
-    rawProps = null,
   ) {
     const vars = Erlang_Maps["merge/2"](props, componentState);
     const mergedContext = Erlang_Maps["merge/2"](
@@ -2090,10 +1997,6 @@ export default class Renderer {
       childrenDom,
       mergedContext,
       vdom,
-      // What the call site wrote, before resolution — the input the fast path compares against
-      // (see #cachedKeyedComponent). Absent for a component reached by some other route, which
-      // simply means that component never takes the fast path.
-      rawProps,
       children: frame.children,
       // Rendered as of now: any later tick that dirties this subtree stamps a higher version, and a
       // wholesale registry swap moves the generation out from under it.
