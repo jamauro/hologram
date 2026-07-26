@@ -5,8 +5,16 @@ import Type from "./type.mjs";
 export default class ComponentRegistry {
   static entries = Type.map();
 
+  // Bumped whenever the registry is replaced wholesale rather than updated component by component:
+  // a page mount repopulating it from the server, or a reset. Renderer's memo caches a component's
+  // render against the state it read HERE, and it detects an ordinary state change by version stamp
+  // on the dispatch that made it — which a wholesale swap goes around. Stamping the entries lets a
+  // cached render tell that the ground it stood on was replaced.
+  static generation = 0;
+
   static clear() {
     ComponentRegistry.entries = Type.map();
+    ComponentRegistry.generation++;
   }
 
   // Removes a component's entry from the registry, freeing its retained state.
@@ -95,6 +103,7 @@ export default class ComponentRegistry {
 
   static populate(entries) {
     ComponentRegistry.entries = entries;
+    ComponentRegistry.generation++;
   }
 
   // Optimized (mutates entries/struct field in-place)
