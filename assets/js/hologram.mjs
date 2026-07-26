@@ -580,6 +580,10 @@ export default class Hologram {
   static markDirty(cid) {
     const key = Type.encodeMapKey(cid);
 
+    // Stamp the component and its ancestors, so every memo entry above it goes stale in O(depth)
+    // rather than being re-validated against a descendant list at render time.
+    Renderer.markDirty(cid);
+
     if (!Hologram.#dirtyCids.some((entry) => entry.key === key)) {
       Hologram.#dirtyCids.push({key, cid});
     }

@@ -135,14 +135,13 @@ export default class Renderer {
   // reconcile drops anything not re-collected each render) — captured as array slices during the
   // original render.
   //
-  // The cache is GC'd per render pass: #memoRendered collects every cid reached this pass and
-  // renderPage drops the rest. Without it the cache is append-only — a cid that leaves the page
-  // (destroyed, or gated out of the template) keeps its whole cached subtree alive forever, since
-  // put_destroy clears the ComponentRegistry entry but knows nothing about this cache. That leak is
-  // invisible while cids are fixed strings, and unbounded the moment they key on data (a cid per
-  // message row ⇒ one retained vdom tree per message ever scrolled past).
+  // The cache is GC'd by change, not by sweep — see #evictDepartedChildren. Without collection the
+  // cache is append-only: a cid that leaves the page (destroyed, or gated out of a template) would
+  // keep its whole cached subtree alive forever, since put_destroy clears the ComponentRegistry
+  // entry but knows nothing about this cache. That leak is invisible while cids are fixed strings,
+  // and unbounded the moment they key on data (a cid per message row ⇒ one retained vdom tree per
+  // message ever scrolled past).
   static #memoCache = new Map();
-  static #memoRendered = new Set();
   static #memoStack = [];
 
   // cidKey => the cid of the component that rendered it, or null at the root. Rebuilt as a
@@ -206,32 +205,73 @@ export default class Renderer {
     }
   }
 
-  // A descendant registers into every ACTIVE ancestor frame (hit or miss), so each memo entry
-  // carries the full transitive stateful-descendant set to validate against the registry later.
-  // `withNested` is true only on the HIT path: a hit's nested components never rendered, so its
-  // cached descendant records must be re-registered explicitly; on a miss they already pushed
-  // themselves into every active frame while rendering.
-  static #memoRegisterInAncestors(record, withNested) {
-    for (const frame of $.#memoStack) {
-      frame.descendants.push(record);
-      if (withNested) {
-        for (const d of record.descendants) {
-          frame.descendants.push(d);
-        }
+  // PATCH (version-stamps) — subtree freshness as one integer comparison.
+  //
+  // An entry is stale when anything in its SUBTREE changed since it rendered. That used to be
+  // answered by carrying every transitive stateful descendant on the entry and re-validating each
+  // against the registry — and, worse, by re-registering a HIT's whole descendant set into every
+  // active ancestor frame, since a hit renders nothing that could register itself. For a 120-row
+  // list that is thousands of array pushes per pass, at every level of the chain, to report that
+  // nothing happened: O(subtree x depth) work for an O(1) fact.
+  //
+  // Instead, one monotonic counter. It ticks when a component's state or emitted context changes,
+  // and the new value is stamped on that component AND on each of its ancestors — O(depth), once
+  // per dispatch, on the path that is about to re-render anyway. An entry rendered at version V is
+  // fresh exactly while its stamp is <= V.
+  static #version = 0;
+  static #dirtyAt = new Map();
+
+  // Called by the dispatcher when a component's state or emitted context actually changed.
+  static markDirty(cid) {
+    Renderer.#version++;
+
+    let key = Type.encodeMapKey(cid);
+    const seen = new Set();
+
+    while (key != null && !seen.has(key)) {
+      seen.add(key);
+      Renderer.#dirtyAt.set(key, Renderer.#version);
+
+      const parent = Renderer.#parentCids.get(key) ?? null;
+      key = parent === null ? null : Type.encodeMapKey(parent);
+    }
+  }
+
+  static #subtreeFresh(cidKey, entry) {
+    return (
+      entry.generation === ComponentRegistry.generation &&
+      (Renderer.#dirtyAt.get(cidKey) ?? 0) <= entry.version
+    );
+  }
+
+  // Cache GC, by change rather than by sweep. A pass used to mark every cid it reached and drop the
+  // rest, which forced a hit to re-register its descendants (see above) purely so they would not be
+  // collected. A component can only leave the tree when the parent that rendered it stops rendering
+  // it — so the parent's own re-render is the moment to notice, by diffing its direct children.
+  static #evictSubtree(cidKey) {
+    const entry = Renderer.#memoCache.get(cidKey);
+
+    Renderer.#memoCache.delete(cidKey);
+    Renderer.#parentCids.delete(cidKey);
+    Renderer.#dirtyAt.delete(cidKey);
+
+    if (entry) {
+      for (const childKey of entry.children) {
+        Renderer.#evictSubtree(childKey);
       }
     }
   }
 
-  static #memoDescendantsFresh(entry) {
-    for (const d of entry.descendants) {
-      if (
-        ComponentRegistry.getComponentState(d.cid) !== d.state ||
-        ComponentRegistry.getComponentEmittedContext(d.cid) !== d.emittedContext
-      ) {
-        return false;
+  static #evictDepartedChildren(previous, children) {
+    if (!previous) {
+      return;
+    }
+
+    for (const childKey of previous.children) {
+      if (!children.has(childKey)) {
+        Renderer.#evictSubtree(childKey);
       }
     }
-    return true;
   }
 
   // Based on: render_page/2
@@ -240,7 +280,6 @@ export default class Renderer {
     Renderer.reachBindings = [];
     Renderer.resizeBindings = [];
     Renderer.#memoStack = [];
-    Renderer.#memoRendered = new Set();
 
     const pageModuleProxy = Interpreter.moduleProxy(pageModule);
 
@@ -252,21 +291,6 @@ export default class Renderer {
       pageParams,
       pageComponentStruct,
     );
-
-    // Drop cached subtrees for cids this pass didn't reach (see #memoCache). Only runs on a render
-    // that completed — a throw mid-render leaves the cache untouched rather than pruning against a
-    // partial set. A hit re-registers its cid, so surviving entries are exactly the live tree.
-    for (const cidKey of Renderer.#memoCache.keys()) {
-      if (!Renderer.#memoRendered.has(cidKey)) {
-        Renderer.#memoCache.delete(cidKey);
-      }
-    }
-
-    for (const cidKey of Renderer.#parentCids.keys()) {
-      if (!Renderer.#memoRendered.has(cidKey)) {
-        Renderer.#parentCids.delete(cidKey);
-      }
-    }
 
     const htmlVnode = pageVdom.find((vnode) => vnode.sel === "html");
 
@@ -338,12 +362,9 @@ export default class Renderer {
       offsets.resize === null ? [] : saved.resize.slice(0, offsets.resize);
 
     const savedStack = Renderer.#memoStack;
-    const savedRendered = Renderer.#memoRendered;
 
     Renderer.#memoStack = [];
-    Renderer.#memoRendered = new Set([cidKey]);
 
-    const previousDescendants = entry.descendants;
     const oldVdom = entry.vdom;
 
     let newVdom;
@@ -365,14 +386,10 @@ export default class Renderer {
       Renderer.reachBindings = saved.reach;
       Renderer.resizeBindings = saved.resize;
       Renderer.#memoStack = savedStack;
-      Renderer.#memoRendered = savedRendered;
       throw error;
     }
 
-    const reached = Renderer.#memoRendered;
-
     Renderer.#memoStack = savedStack;
-    Renderer.#memoRendered = savedRendered;
 
     // A template whose ROOT node count changed cannot be adopted in place — each root is patched
     // against its counterpart, and there is no counterpart for one that appeared or vanished.
@@ -425,17 +442,6 @@ export default class Renderer {
     Renderer.listenerBindings = spliced.listenerBindings;
     Renderer.reachBindings = spliced.reachBindings;
     Renderer.resizeBindings = spliced.resizeBindings;
-
-    // Scoped GC: a full pass prunes everything it did not reach, which here would delete the whole
-    // page. Only components that were under THIS subtree and no longer are can have gone away.
-    for (const descendant of previousDescendants) {
-      const descendantKey = Type.encodeMapKey(descendant.cid);
-
-      if (!reached.has(descendantKey)) {
-        Renderer.#memoCache.delete(descendantKey);
-        Renderer.#parentCids.delete(descendantKey);
-      }
-    }
 
     return {cid, oldVdom, newVdom, bindingsChanged};
   }
@@ -2129,22 +2135,21 @@ export default class Renderer {
     // previous render's exact vnode objects (snabbdom then skips the whole subtree by identity).
     const cidKey = Type.encodeMapKey(cid);
 
-    // Reached this pass — keeps renderPage's prune from dropping it, on the hit path as well as the
-    // miss path (a hit never re-populates the cache, so registering only on a miss would evict every
-    // memoized subtree on the very next render).
-    Renderer.#memoRendered.add(cidKey);
+    // The enclosing component records this one as a direct child, hit or miss — that set is what
+    // tells a later re-render which children have gone away (see #evictDepartedChildren).
+    Renderer.#memoStack.at(-1)?.children.add(cidKey);
 
     const entry = Renderer.#memoCache.get(cidKey);
 
     if (
       entry &&
       entry.parentTagName === parentTagName &&
+      Renderer.#subtreeFresh(cidKey, entry) &&
       Renderer.#memoEq(entry.state, componentState) &&
       Renderer.#memoEq(entry.emittedContext, componentEmittedContext) &&
       Renderer.#memoEq(entry.props, props) &&
       Renderer.#memoEq(entry.context, context) &&
-      Renderer.#memoEq(entry.childrenDom, childrenDom) &&
-      Renderer.#memoDescendantsFresh(entry)
+      Renderer.#memoEq(entry.childrenDom, childrenDom)
     ) {
       Renderer.listenerBindings.push(...entry.bindings.listener);
       Renderer.reachBindings.push(...entry.bindings.reach);
@@ -2152,24 +2157,6 @@ export default class Renderer {
       Renderer.intersectBindings.push(...entry.bindings.intersect);
 
       ComponentRegistry.putComponentContext(cid, entry.mergedContext);
-
-      // A hit renders no descendants, so nothing below would register itself as reached and
-      // renderPage's prune would drop the cache of every component under a hit — leaving the next
-      // MISS on this component to rebuild its whole subtree from scratch. The entry's descendant set
-      // is transitive, so re-registering it here keeps the live tree intact.
-      for (const descendant of entry.descendants) {
-        Renderer.#memoRendered.add(Type.encodeMapKey(descendant.cid));
-      }
-
-      Renderer.#memoRegisterInAncestors(
-        {
-          cid,
-          state: componentState,
-          emittedContext: componentEmittedContext,
-          descendants: entry.descendants,
-        },
-        true,
-      );
 
       return entry.vdom;
     }
@@ -2214,7 +2201,7 @@ export default class Renderer {
     const frame = {
       // The scope an inferred-cid child resolves against (see #injectInferredCid).
       cid,
-      descendants: [],
+      children: new Set(),
       marks: {
         listener: Renderer.listenerBindings.length,
         reach: Renderer.reachBindings.length,
@@ -2240,6 +2227,12 @@ export default class Renderer {
       Renderer.#memoStack.pop();
     }
 
+    // Anything this component used to render and no longer does leaves the tree with its subtree.
+    Renderer.#evictDepartedChildren(
+      Renderer.#memoCache.get(cidKey),
+      frame.children,
+    );
+
     Renderer.#memoCache.set(cidKey, {
       parentTagName,
       state: componentState,
@@ -2249,7 +2242,11 @@ export default class Renderer {
       childrenDom,
       mergedContext,
       vdom,
-      descendants: frame.descendants,
+      children: frame.children,
+      // Rendered as of now: any later tick that dirties this subtree stamps a higher version, and a
+      // wholesale registry swap moves the generation out from under it.
+      version: Renderer.#version,
+      generation: ComponentRegistry.generation,
       bindings: {
         listener: Renderer.listenerBindings.slice(frame.marks.listener),
         reach: Renderer.reachBindings.slice(frame.marks.reach),
@@ -2257,16 +2254,6 @@ export default class Renderer {
         intersect: Renderer.intersectBindings.slice(frame.marks.intersect),
       },
     });
-
-    Renderer.#memoRegisterInAncestors(
-      {
-        cid,
-        state: componentState,
-        emittedContext: componentEmittedContext,
-        descendants: frame.descendants,
-      },
-      false,
-    );
 
     return vdom;
   }
