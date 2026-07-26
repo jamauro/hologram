@@ -683,6 +683,14 @@ export default class Hologram {
     return false;
   }
 
+  // Exposed for measurement: the fast path's hit rate is otherwise invisible.
+  static renderStats() {
+    return {
+      attempts: Renderer.fastPathAttempts,
+      hits: Renderer.fastPathHits,
+    };
+  }
+
   static #renderPageFully(startTime, reason) {
     Hologram.#fullRenderRequired = false;
 
@@ -1381,6 +1389,7 @@ export default class Hologram {
       }
 
       GlobalRegistry.set("mountedPage", Interpreter.inspect($.#pageModule));
+      GlobalRegistry.set("renderStats", () => Hologram.renderStats());
 
       Hologram.#scheduleQueuedInitActions();
       Hologram.#dispatchPendingJsInteropActions();
