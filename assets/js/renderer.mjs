@@ -297,7 +297,7 @@ export default class Renderer {
     const module = ComponentRegistry.getComponentModule(cid);
 
     if (!entry || module === null) {
-      return null;
+      return Renderer.#bailSubtree("not rendered yet");
     }
 
     const moduleProxy = Interpreter.moduleProxy(module);
@@ -326,7 +326,7 @@ export default class Renderer {
 
       // The cached run is not where it was: this cache predates the current binding arrays.
       if (offsets[name] === -1) {
-        return null;
+        return Renderer.#bailSubtree(`stale ${name} bindings`);
       }
     }
 
@@ -378,17 +378,17 @@ export default class Renderer {
     // against its counterpart, and there is no counterpart for one that appeared or vanished.
     // Snabbdom patches a vnode, not a variable-length sibling run, so this hands back to a full
     // render rather than growing a sibling-insertion path here.
-    const bail = () => {
+    const bail = (reason) => {
       Renderer.listenerBindings = saved.listener;
       Renderer.reachBindings = saved.reach;
       Renderer.resizeBindings = saved.resize;
       Renderer.#memoCache.set(cidKey, entry);
 
-      return null;
+      return Renderer.#bailSubtree(reason);
     };
 
     if (newVdom.length !== oldVdom.length) {
-      return bail();
+      return bail("root count changed");
     }
 
     // Splice each freshly collected run back over the one it replaces. A run that changed LENGTH
@@ -407,7 +407,7 @@ export default class Renderer {
           : Renderer[arrayName].slice(offsets[name]);
 
       if (newSlice.length !== oldSlice.length) {
-        return bail();
+        return bail(`${name} bindings changed shape`);
       }
 
       spliced[arrayName] =
@@ -438,6 +438,17 @@ export default class Renderer {
     }
 
     return {cid, oldVdom, newVdom, bindingsChanged};
+  }
+
+  // Why the last partial attempt handed back to the page path. Read by render()'s log line: a
+  // fallback is correct but costs the subtree render that preceded it, so a fallback firing on a
+  // hot path is worth seeing rather than guessing at.
+  static subtreeBailReason = null;
+
+  static #bailSubtree(reason) {
+    Renderer.subtreeBailReason = reason;
+
+    return null;
   }
 
   // Adopts a patched subtree's root vnodes back into the tree the ancestors already hold. The

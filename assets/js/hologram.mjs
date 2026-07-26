@@ -598,13 +598,19 @@ export default class Hologram {
 
     Hologram.#dirtyCids = [];
 
+    let fallbackReason = Hologram.#fullRenderRequired ? "required" : "nothing dirty";
+
     if (!Hologram.#fullRenderRequired && dirty.length > 0) {
+      Renderer.subtreeBailReason = null;
+
       if (Hologram.#renderDirtySubtrees(dirty, startTime)) {
         return;
       }
+
+      fallbackReason = Renderer.subtreeBailReason ?? "root component";
     }
 
-    Hologram.#renderPageFully(startTime);
+    Hologram.#renderPageFully(startTime, fallbackReason);
   }
 
   // Re-renders each dirty component in place. Returns false when any of them cannot be rendered in
@@ -697,7 +703,7 @@ export default class Hologram {
     return false;
   }
 
-  static #renderPageFully(startTime) {
+  static #renderPageFully(startTime, reason) {
     Hologram.#fullRenderRequired = false;
 
     const newVirtualDocument = Renderer.renderPage(
@@ -735,7 +741,11 @@ export default class Hologram {
     // again as content this render added extends or fills the container.
     EventListeners.recheckScrollEdges();
 
-    console.log("Hologram: page rendered in", PerformanceTimer.diff(startTime));
+    console.log(
+      "Hologram: page rendered in",
+      PerformanceTimer.diff(startTime),
+      reason ? `(${reason})` : "",
+    );
   }
 
   static run() {
