@@ -600,6 +600,13 @@ export default class Hologram {
 
     let fallbackReason = Hologram.#fullRenderRequired ? "required" : "nothing dirty";
 
+    // Escape hatch, and the only honest way to A/B the two paths in one build:
+    //   globalThis.Hologram.disableSubtreeRender = true
+    if (globalThis.Hologram.disableSubtreeRender === true) {
+      Hologram.#renderPageFully(startTime, "subtree render disabled");
+      return;
+    }
+
     if (!Hologram.#fullRenderRequired && dirty.length > 0) {
       Renderer.subtreeBailReason = null;
 
