@@ -541,9 +541,133 @@ export default class Hologram {
     }
   }
 
+  // PATCH (subtree-render) — the cids whose state or emitted context actually changed since the
+  // last paint, and the flag that forces the page-level path. Both are consumed by render().
+  static #dirtyCids = [];
+  static #fullRenderRequired = true;
+
+  static markDirty(cid) {
+    const key = Type.encodeMapKey(cid);
+
+    if (!Hologram.#dirtyCids.some((entry) => entry.key === key)) {
+      Hologram.#dirtyCids.push({key, cid});
+    }
+  }
+
+  // Anything a subtree render cannot express: boot, navigation, a destroyed component. Cleared by
+  // the next full render.
+  static requireFullRender() {
+    Hologram.#fullRenderRequired = true;
+  }
+
   // Made public to make tests easier
   static render() {
     const startTime = performance.now();
+    const dirty = Hologram.#dirtyCids;
+
+    Hologram.#dirtyCids = [];
+
+    if (!Hologram.#fullRenderRequired && dirty.length > 0) {
+      if (Hologram.#renderDirtySubtrees(dirty, startTime)) {
+        return;
+      }
+    }
+
+    Hologram.#renderPageFully(startTime);
+  }
+
+  // Re-renders each dirty component in place. Returns false when any of them cannot be rendered in
+  // isolation, in which case the caller falls back to the page path — safe at any point, since a
+  // full render re-derives everything a partial pass had already applied.
+  static #renderDirtySubtrees(dirty, startTime) {
+    // A dirty component nested under another dirty one is rendered by that ancestor's pass, and
+    // rendering it separately first would patch DOM the ancestor is about to replace.
+    const outermost = dirty.filter(({cid}) => !Hologram.#hasDirtyAncestor(cid, dirty));
+    const results = [];
+
+    for (const {cid} of outermost) {
+      // A root component (the layout) owns <html>, whose head and body are patched by a dedicated
+      // path that preserves stylesheet and script handling. Patching its roots directly would go
+      // around that, and skipping the page render saves nothing when the dirty component IS the
+      // page's outermost one.
+      if (Renderer.parentCid(cid) === null) {
+        return false;
+      }
+
+      const result = Renderer.renderSubtree(cid);
+
+      if (result === null) {
+        return false;
+      }
+
+      results.push(result);
+    }
+
+    // The same straddle a full render does: snapshot after the actions ran, restore immediately
+    // after the DOM is patched (see FollowEdge).
+    const followEdges = FollowEdge.snapshot();
+
+    let bindingsChanged = false;
+
+    for (const {cid, oldVdom, newVdom, bindingsChanged: changed} of results) {
+      for (let i = 0; i < oldVdom.length; i++) {
+        Vdom.patchSubtreeRoot(oldVdom[i], newVdom[i]);
+      }
+
+      Renderer.adoptSubtreeRoots(cid, oldVdom, newVdom);
+      bindingsChanged = bindingsChanged || changed;
+    }
+
+    FollowEdge.restore(followEdges);
+
+    // Only when this pass touched a side-band binding: the registry keeps one real listener per
+    // (target, key) and just swaps its handler list, but the handlers themselves close over the
+    // render that built them, so a re-rendered subtree's must replace the previous ones.
+    if (bindingsChanged) {
+      EventListenerRegistry.reconcile([
+        ...Renderer.resolveListenerBindings(),
+        ...Renderer.resolveReachBindings(),
+        ...Renderer.resolveResizeBindings(),
+      ]);
+    }
+
+    EventListeners.recheckScrollEdges();
+
+    console.log(
+      "Hologram:",
+      results.length === 1 ? "component" : `${results.length} components`,
+      "rendered in",
+      PerformanceTimer.diff(startTime),
+    );
+
+    return true;
+  }
+
+  static #hasDirtyAncestor(cid, dirty) {
+    const seen = new Set();
+    let parent = Renderer.parentCid(cid);
+
+    while (parent !== null) {
+      const key = Type.encodeMapKey(parent);
+
+      if (seen.has(key)) {
+        return false;
+      }
+
+      seen.add(key);
+
+      if (dirty.some((entry) => entry.key === key)) {
+        return true;
+      }
+
+      parent = Renderer.parentCid(parent);
+    }
+
+    return false;
+  }
+
+  static #renderPageFully(startTime) {
+    Hologram.#fullRenderRequired = false;
 
     const newVirtualDocument = Renderer.renderPage(
       Hologram.#pageModule,
@@ -1195,6 +1319,10 @@ export default class Hologram {
   }
 
   static #mountPage(isPageModuleRegistered = false) {
+    // Boot and every navigation start from a page the renderer has no memo for — and on boot, from
+    // a DOM it adopted rather than built. Only the page path can establish that baseline.
+    Hologram.requireFullRender();
+
     let mountData = null;
 
     if ($.#shouldLoadMountData) {
@@ -1312,6 +1440,9 @@ export default class Hologram {
     );
 
     if (!Type.isNil(nextDestroy)) {
+      // A destroyed component's markup is gated out by an ANCESTOR's template, so the change lives
+      // above the dirty component, not inside it. Nothing narrower than a full render can see it.
+      Hologram.requireFullRender();
       ComponentRegistry.deleteEntry(nextDestroy);
       // PATCH: tell the server to drop this cid's channel subscriptions (fire-and-forget, no reply).
       Connection.sendMessage(
@@ -1377,7 +1508,23 @@ export default class Hologram {
     // The acting component may have destroyed itself via put_destroy; only write its struct back
     // if it is still registered.
     if (ComponentRegistry.isCidRegistered(target)) {
+      // PATCH (subtree-render) — what actually changed, recorded before the write. A dispatch can
+      // only rewrite ITS target's struct, so the dirty set is these targets across an inline
+      // cascade. put_state on an unchanged value is already a no-op upstream, which is what makes
+      // a reference comparison meaningful here rather than merely conservative.
+      const previousState = ComponentRegistry.getComponentState(target);
+      const previousEmittedContext =
+        ComponentRegistry.getComponentEmittedContext(target);
+
       ComponentRegistry.putComponentStruct(target, savedComponentStruct);
+
+      if (
+        ComponentRegistry.getComponentState(target) !== previousState ||
+        ComponentRegistry.getComponentEmittedContext(target) !==
+          previousEmittedContext
+      ) {
+        Hologram.markDirty(target);
+      }
     }
 
     globalThis.Hologram.isProfilingEnabled = false;
