@@ -221,6 +221,16 @@ export default class Renderer {
   static #version = 0;
   static #dirtyAt = new Map();
 
+  // cidKey => the cidKey of the component whose TEMPLATE rendered it, or absent at the root.
+  //
+  // Deliberately not #parentCids, which records the event-routing chain (the defaultTarget in
+  // scope) and is retargeted at the page boundary: a component rendered by the page has "page" as
+  // its routing parent, "page" is not a stateful component, and a walk up that chain therefore
+  // stops before it reaches the layout — leaving every ancestor above the page looking fresh.
+  // Invalidation needs CONTAINMENT — whose vdom embeds whose — which is exactly the frame that
+  // was open when this component rendered.
+  static #renderParents = new Map();
+
   // Called by the dispatcher when a component's state or emitted context actually changed.
   static markDirty(cid) {
     Renderer.#version++;
@@ -231,9 +241,7 @@ export default class Renderer {
     while (key != null && !seen.has(key)) {
       seen.add(key);
       Renderer.#dirtyAt.set(key, Renderer.#version);
-
-      const parent = Renderer.#parentCids.get(key) ?? null;
-      key = parent === null ? null : Type.encodeMapKey(parent);
+      key = Renderer.#renderParents.get(key) ?? null;
     }
   }
 
@@ -253,6 +261,7 @@ export default class Renderer {
 
     Renderer.#memoCache.delete(cidKey);
     Renderer.#parentCids.delete(cidKey);
+    Renderer.#renderParents.delete(cidKey);
     Renderer.#dirtyAt.delete(cidKey);
 
     if (entry) {
@@ -2136,8 +2145,16 @@ export default class Renderer {
     const cidKey = Type.encodeMapKey(cid);
 
     // The enclosing component records this one as a direct child, hit or miss — that set is what
-    // tells a later re-render which children have gone away (see #evictDepartedChildren).
-    Renderer.#memoStack.at(-1)?.children.add(cidKey);
+    // tells a later re-render which children have gone away (see #evictDepartedChildren) — and this
+    // one records who contains it, which is the chain invalidation climbs. Only when a frame is
+    // actually open: a root has no container, and a subtree render enters with an empty stack and
+    // must keep the containment it already had.
+    const enclosing = Renderer.#memoStack.at(-1);
+
+    if (enclosing) {
+      enclosing.children.add(cidKey);
+      Renderer.#renderParents.set(cidKey, Type.encodeMapKey(enclosing.cid));
+    }
 
     const entry = Renderer.#memoCache.get(cidKey);
 
