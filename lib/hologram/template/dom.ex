@@ -163,29 +163,36 @@ defmodule Hologram.Template.DOM do
   def key_nodes(nil, nodes), do: nodes
 
   def key_nodes(key, nodes) do
-    if Enum.any?(nodes, &component?/1) do
-      key_first(nodes, &component?/1, &put_component_key(&1, key))
+    if has_component?(nodes) do
+      key_first_component(nodes, key)
     else
-      key_first(nodes, &element?/1, &put_element_key(&1, key))
+      key_first_element(nodes, key)
     end
   end
 
-  defp component?({:component, _module, _props, _children}), do: true
-  defp component?(_node), do: false
+  # Written as direct recursion over the node list rather than Enum.any?/Enum.map_reduce with
+  # captured predicates. This runs once PER ITERATION of every keyed comprehension, and on the
+  # client every Enum call and every closure invocation is interpreted: the Enum form measured
+  # ~8ms per 120-row list render (Enum.any?'s predicate walk alone was ~3ms of it), against a
+  # body that only has to find one node in a list of two or three.
+  defp has_component?([{:component, _module, _props, _children} | _rest]), do: true
+  defp has_component?([_node | rest]), do: has_component?(rest)
+  defp has_component?([]), do: false
 
-  defp element?({:element, _tag, _attrs, _children}), do: true
-  defp element?(_node), do: false
+  # Replaces the first component (resp. element) node with its keyed copy, leaving the rest alone.
+  # A node the clause head doesn't match — text, expression, or the nested list an {%if} inside the
+  # loop body produces — is passed over, exactly as the predicate walk did.
+  defp key_first_component([{:component, _module, _props, _children} = node | rest], key),
+    do: [put_component_key(node, key) | rest]
 
-  # Replaces the first node matching `match?` with `apply_key.(node)`, leaving everything else alone.
-  defp key_first(nodes, match?, apply_key) do
-    {keyed, _done?} =
-      Enum.map_reduce(nodes, false, fn
-        node, false -> if match?.(node), do: {apply_key.(node), true}, else: {node, false}
-        node, true -> {node, true}
-      end)
+  defp key_first_component([node | rest], key), do: [node | key_first_component(rest, key)]
+  defp key_first_component([], _key), do: []
 
-    keyed
-  end
+  defp key_first_element([{:element, _tag, _attrs, _children} = node | rest], key),
+    do: [put_element_key(node, key) | rest]
+
+  defp key_first_element([node | rest], key), do: [node | key_first_element(rest, key)]
+  defp key_first_element([], _key), do: []
 
   defp put_component_key({:component, module, props, children} = node, key) do
     if List.keymember?(props, "cid", 0) do
