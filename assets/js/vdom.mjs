@@ -247,6 +247,14 @@ export default class Vdom {
   }
 
   // Covered in feature tests
+  // PATCH (subtree-render) — patches ONE root vnode of a re-rendered component against its previous
+  // self. The old vnode carries the live `.elm` from the pass that mounted it, which is all Snabbdom
+  // needs to patch in place; identical objects (an unchanged memoized subtree) short-circuit exactly
+  // as they do inside a full patch.
+  static patchSubtreeRoot(oldRoot, newRoot) {
+    return oldRoot === newRoot ? oldRoot : patch(oldRoot, newRoot);
+  }
+
   static patchVirtualDocument(oldVirtualDocument, newVirtualDocument) {
     const newRootVNode = {
       // Keep the same selector (tag name, id, classes)

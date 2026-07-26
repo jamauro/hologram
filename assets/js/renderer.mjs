@@ -279,6 +279,193 @@ export default class Renderer {
     return htmlVnode;
   }
 
+  // PATCH (subtree-render) — re-render ONE component in place, from its own state outward, instead
+  // of re-deriving the page from the root.
+  //
+  // Everything the component needs is already in its memo entry — the props, inherited context,
+  // expanded children DOM and parent tag its PARENT resolved for it. Those are inputs the parent
+  // computes, and the parent is not dirty (a caller that renders a subtree has established that),
+  // so re-using them is the same purity assumption the memo itself rests on.
+  //
+  // Returns {oldVdom, newVdom, bindingsChanged} for the caller to patch, or null when the component
+  // cannot be rendered in isolation — an unknown or never-rendered cid, or a side-band binding set
+  // that changed shape (see below). Null means "fall back to a full render", and it is always safe
+  // to fall back, including after another subtree in the same pass has already been patched.
+  static renderSubtree(cid) {
+    const cidKey = Type.encodeMapKey(cid);
+    const entry = Renderer.#memoCache.get(cidKey);
+    const moduleProxy = ComponentRegistry.getComponentModule(cid);
+
+    if (!entry || !moduleProxy) {
+      return null;
+    }
+
+    const componentState = ComponentRegistry.getComponentState(cid);
+    const componentEmittedContext =
+      ComponentRegistry.getComponentEmittedContext(cid);
+
+    // Side-band bindings (window/document listeners, reach, resize) are collected into flat
+    // per-render arrays and reconciled as a whole — anything absent is torn down. A partial render
+    // only re-collects ITS subtree's run, so the run is spliced back into the page's arrays at the
+    // offset it occupied. Rendering into a copy of the prefix keeps each binding's slotKey (its
+    // index across the page's bindings) identical to what a full render would have assigned.
+    const saved = {
+      listener: Renderer.listenerBindings,
+      reach: Renderer.reachBindings,
+      resize: Renderer.resizeBindings,
+    };
+
+    const offsets = {};
+
+    for (const name of ["listener", "reach", "resize"]) {
+      const oldSlice = entry.bindings[name];
+      offsets[name] =
+        oldSlice.length === 0 ? null : saved[name].indexOf(oldSlice[0]);
+
+      // The cached run is not where it was: this cache predates the current binding arrays.
+      if (offsets[name] === -1) {
+        return null;
+      }
+    }
+
+    Renderer.listenerBindings =
+      offsets.listener === null ? [] : saved.listener.slice(0, offsets.listener);
+    Renderer.reachBindings =
+      offsets.reach === null ? [] : saved.reach.slice(0, offsets.reach);
+    Renderer.resizeBindings =
+      offsets.resize === null ? [] : saved.resize.slice(0, offsets.resize);
+
+    const savedStack = Renderer.#memoStack;
+    const savedRendered = Renderer.#memoRendered;
+
+    Renderer.#memoStack = [];
+    Renderer.#memoRendered = new Set([cidKey]);
+
+    const previousDescendants = entry.descendants;
+    const oldVdom = entry.vdom;
+
+    let newVdom;
+
+    try {
+      newVdom = Renderer.#renderComponentBody(
+        cid,
+        cidKey,
+        moduleProxy,
+        entry.props,
+        entry.context,
+        entry.childrenDom,
+        entry.parentTagName,
+        componentState,
+        componentEmittedContext,
+      );
+    } catch (error) {
+      Renderer.listenerBindings = saved.listener;
+      Renderer.reachBindings = saved.reach;
+      Renderer.resizeBindings = saved.resize;
+      Renderer.#memoStack = savedStack;
+      Renderer.#memoRendered = savedRendered;
+      throw error;
+    }
+
+    const reached = Renderer.#memoRendered;
+
+    Renderer.#memoStack = savedStack;
+    Renderer.#memoRendered = savedRendered;
+
+    // A template whose ROOT node count changed cannot be adopted in place — each root is patched
+    // against its counterpart, and there is no counterpart for one that appeared or vanished.
+    // Snabbdom patches a vnode, not a variable-length sibling run, so this hands back to a full
+    // render rather than growing a sibling-insertion path here.
+    const bail = () => {
+      Renderer.listenerBindings = saved.listener;
+      Renderer.reachBindings = saved.reach;
+      Renderer.resizeBindings = saved.resize;
+      Renderer.#memoCache.set(cidKey, entry);
+
+      return null;
+    };
+
+    if (newVdom.length !== oldVdom.length) {
+      return bail();
+    }
+
+    // Splice each freshly collected run back over the one it replaces. A run that changed LENGTH
+    // would shift every later binding's slotKey, so that case gives up and re-renders the page —
+    // it means this subtree gained or lost a window listener, a reach or a resize, which is a
+    // structural change rare enough not to be worth the bookkeeping.
+    let bindingsChanged = false;
+    const spliced = {};
+
+    for (const name of ["listener", "reach", "resize"]) {
+      const arrayName = name + "Bindings";
+      const oldSlice = entry.bindings[name];
+      const newSlice =
+        offsets[name] === null
+          ? Renderer[arrayName]
+          : Renderer[arrayName].slice(offsets[name]);
+
+      if (newSlice.length !== oldSlice.length) {
+        return bail();
+      }
+
+      spliced[arrayName] =
+        offsets[name] === null
+          ? saved[name]
+          : Renderer[arrayName].concat(
+              saved[name].slice(offsets[name] + oldSlice.length),
+            );
+
+      if (newSlice.length > 0) {
+        bindingsChanged = true;
+      }
+    }
+
+    Renderer.listenerBindings = spliced.listenerBindings;
+    Renderer.reachBindings = spliced.reachBindings;
+    Renderer.resizeBindings = spliced.resizeBindings;
+
+    // Scoped GC: a full pass prunes everything it did not reach, which here would delete the whole
+    // page. Only components that were under THIS subtree and no longer are can have gone away.
+    for (const descendant of previousDescendants) {
+      const descendantKey = Type.encodeMapKey(descendant.cid);
+
+      if (!reached.has(descendantKey)) {
+        Renderer.#memoCache.delete(descendantKey);
+        Renderer.#parentCids.delete(descendantKey);
+      }
+    }
+
+    return {cid, oldVdom, newVdom, bindingsChanged};
+  }
+
+  // Adopts a patched subtree's root vnodes back into the tree the ancestors already hold. The
+  // ancestors' cached vdom arrays (and the page's virtual document) reference the OLD root objects
+  // by identity, and nothing walks down to re-point them, so the new render is copied ONTO those
+  // objects: every holder then describes the live DOM, and the memo entry keeps returning the same
+  // objects, which is what lets Snabbdom skip an unchanged subtree by identity on a later pass.
+  static adoptSubtreeRoots(cid, oldVdom, newVdom) {
+    for (let i = 0; i < oldVdom.length; i++) {
+      const oldRoot = oldVdom[i];
+      const newRoot = newVdom[i];
+
+      if (oldRoot === newRoot) {
+        continue;
+      }
+
+      for (const key of Object.keys(oldRoot)) {
+        delete oldRoot[key];
+      }
+
+      Object.assign(oldRoot, newRoot);
+    }
+
+    const entry = Renderer.#memoCache.get(Type.encodeMapKey(cid));
+
+    if (entry) {
+      entry.vdom = oldVdom;
+    }
+  }
+
   // Resolves this render's <window>/<document> listener bindings, dropping any spent once binding so
   // reconcile detaches its real listener through the same path that removes a vanished binding. The
   // fired-state is keyed by the binding's target and slot, both carried on the binding. The drop is
@@ -1974,6 +2161,33 @@ export default class Renderer {
       return entry.vdom;
     }
 
+    return Renderer.#renderComponentBody(
+      cid,
+      cidKey,
+      moduleProxy,
+      props,
+      context,
+      childrenDom,
+      parentTagName,
+      componentState,
+      componentEmittedContext,
+    );
+  }
+
+  // The memo MISS path: execute the template, cache everything a later render (full or partial)
+  // needs to reproduce or skip this component, and register with the ancestors on the stack.
+  // Split out of #renderStatefulComponent because renderSubtree/1 runs exactly this, standalone.
+  static #renderComponentBody(
+    cid,
+    cidKey,
+    moduleProxy,
+    props,
+    context,
+    childrenDom,
+    parentTagName,
+    componentState,
+    componentEmittedContext,
+  ) {
     const vars = Erlang_Maps["merge/2"](props, componentState);
     const mergedContext = Erlang_Maps["merge/2"](
       context,
