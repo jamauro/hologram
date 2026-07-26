@@ -792,9 +792,11 @@ export default class Renderer {
       Type.nil(),
     );
 
-    if (Type.isNil(loopKey)) {
+    if (Type.isNil(loopKey) || globalThis.Hologram?.disableFastPath === true) {
       return null;
     }
+
+    Renderer.fastPathAttempts++;
 
     const enclosing = Renderer.#memoStack.at(-1);
 
@@ -836,6 +838,7 @@ export default class Renderer {
       return null;
     }
 
+    Renderer.fastPathHits++;
     enclosing.children.add(cidKey);
     Renderer.#renderParents.set(cidKey, scopeKey);
 
@@ -849,6 +852,10 @@ export default class Renderer {
   }
 
   static #keyedCids = new Map();
+
+  // Diagnostics for the fast path (see #cachedKeyedComponent), read from the console.
+  static fastPathAttempts = 0;
+  static fastPathHits = 0;
 
   static #castProps(propsDom, moduleProxy) {
     const propsTuples = Renderer.#filterAllowedProps(
