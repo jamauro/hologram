@@ -283,11 +283,13 @@ export default class Renderer {
   static renderSubtree(cid) {
     const cidKey = Type.encodeMapKey(cid);
     const entry = Renderer.#memoCache.get(cidKey);
-    const moduleProxy = ComponentRegistry.getComponentModule(cid);
+    const module = ComponentRegistry.getComponentModule(cid);
 
-    if (!entry || !moduleProxy) {
+    if (!entry || module === null) {
       return null;
     }
+
+    const moduleProxy = Interpreter.moduleProxy(module);
 
     const componentState = ComponentRegistry.getComponentState(cid);
     const componentEmittedContext =
