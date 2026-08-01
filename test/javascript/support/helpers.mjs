@@ -174,6 +174,33 @@ export function contextFixture(data = {}) {
 
 function defineElixirEnumModule() {
   return {
+    // Minimal stand-in for the transpiled Enum.to_list/1 — lists pass through and ranges
+    // materialize, which is what the manually ported Enum functions need in unit tests.
+    "to_list/1": (term) => {
+      if (Type.isList(term)) {
+        return term;
+      }
+
+      if (Type.isRange(term)) {
+        const field = (name) =>
+          Number(term.data[Type.encodeMapKey(Type.atom(name))][1].value);
+
+        const first = field("first");
+        const last = field("last");
+        const step = field("step");
+
+        const data = [];
+
+        for (let i = first; step > 0 ? i <= last : i >= last; i += step) {
+          data.push(Type.integer(i));
+        }
+
+        return Type.list(data);
+      }
+
+      throw new HologramInterpreterError(`not a list or range: ${inspectEx(term)}`);
+    },
+
     "reverse/1": (term) => {
       if (!Type.isList(term) && !Type.isTuple(term)) {
         throw new HologramInterpreterError(

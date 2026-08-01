@@ -51,10 +51,12 @@ import ManuallyPortedElixirApplication from "./elixir/application.mjs";
 import ManuallyPortedElixirCldrLocale from "./elixir/cldr/locale.mjs";
 import ManuallyPortedElixirCldrValidityU from "./elixir/cldr/validity/u.mjs";
 import ManuallyPortedElixirCode from "./elixir/code.mjs";
+import ManuallyPortedElixirEnum from "./elixir/enum.mjs";
 import ManuallyPortedElixirHologramJS from "./elixir/hologram/js.mjs";
 import ManuallyPortedElixirHologramRouterHelpers from "./elixir/hologram/router/helpers.mjs";
 import ManuallyPortedElixirIO from "./elixir/io.mjs";
 import ManuallyPortedElixirKernel from "./elixir/kernel.mjs";
+import ManuallyPortedElixirList from "./elixir/list.mjs";
 import ManuallyPortedElixirString from "./elixir/string.mjs";
 import ManuallyPortedElixirTask from "./elixir/task.mjs";
 import ManuallyPortedElixirURI from "./elixir/uri.mjs";
@@ -847,6 +849,27 @@ export default class Hologram {
     );
 
     Interpreter.defineManuallyPortedFunction(
+      "Enum",
+      "drop/2",
+      "public",
+      ManuallyPortedElixirEnum["drop/2"],
+    );
+
+    Interpreter.defineManuallyPortedFunction(
+      "Enum",
+      "find_index/2",
+      "public",
+      ManuallyPortedElixirEnum["find_index/2"],
+    );
+
+    Interpreter.defineManuallyPortedFunction(
+      "Enum",
+      "take/2",
+      "public",
+      ManuallyPortedElixirEnum["take/2"],
+    );
+
+    Interpreter.defineManuallyPortedFunction(
       "Hologram.JS",
       "call/4",
       "public",
@@ -977,6 +1000,20 @@ export default class Hologram {
       "inspect/2",
       "public",
       ManuallyPortedElixirKernel["inspect/2"],
+    );
+
+    Interpreter.defineManuallyPortedFunction(
+      "List",
+      "last/1",
+      "public",
+      ManuallyPortedElixirList["last/1"],
+    );
+
+    Interpreter.defineManuallyPortedFunction(
+      "List",
+      "last/2",
+      "public",
+      ManuallyPortedElixirList["last/2"],
     );
 
     Interpreter.defineManuallyPortedFunction(

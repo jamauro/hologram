@@ -226,6 +226,9 @@ defmodule Hologram.Compiler.CallGraph do
     {Cldr.Locale, :language_data, 0},
     {Cldr.Validity.U, :encode_key, 2},
     {Code, :ensure_loaded, 1},
+    {Enum, :drop, 2},
+    {Enum, :find_index, 2},
+    {Enum, :take, 2},
     {Hologram.JS, :call, 4},
     {Hologram.JS, :delete, 3},
     {Hologram.JS, :dispatch_event, 5},
@@ -245,6 +248,8 @@ defmodule Hologram.Compiler.CallGraph do
     {IO, :warn_once, 3},
     {Kernel, :inspect, 1},
     {Kernel, :inspect, 2},
+    {List, :last, 1},
+    {List, :last, 2},
     {String, :contains?, 2},
     {String, :downcase, 1},
     {String, :downcase, 2},
@@ -301,6 +306,9 @@ defmodule Hologram.Compiler.CallGraph do
     ],
     manually_ported_code_module: [
       {:code, :ensure_loaded, 1}
+    ],
+    manually_ported_enum_module: [
+      {Enum, :to_list, 1}
     ],
     manually_ported_io_module: [
       {:erlang, :iolist_to_binary, 1}
