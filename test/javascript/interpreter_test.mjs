@@ -1603,7 +1603,12 @@ describe("Interpreter", () => {
           body: enumerable2,
         };
 
-        const stub = sinon
+        // A local sandbox, because the surrounding beforeEach has already replaced to_list/1:
+        // a default-sandbox stub would record that replacement as the "original", and any later
+        // sinon.restore() — even in another test file — would re-install it over the real one.
+        const sandbox = sinon.createSandbox();
+
+        const stub = sandbox
           .stub(Elixir_Enum, "to_list/1")
           .callsFake((enumerable) => enumerable);
 
@@ -1618,7 +1623,7 @@ describe("Interpreter", () => {
         sinon.assert.calledWith(stub, enumerable1(context));
         sinon.assert.calledWith(stub, enumerable2(context));
 
-        Elixir_Enum["to_list/1"].restore();
+        sandbox.restore();
       });
     });
 
@@ -2488,7 +2493,10 @@ describe("Interpreter", () => {
           body: enumerable2,
         };
 
-        const stub = sinon
+        // A local sandbox, for the same reason as the to_list/1 stub above.
+        const sandbox = sinon.createSandbox();
+
+        const stub = sandbox
           .stub(Elixir_Enum, "into/2")
           .callsFake((enumerable, _collectable) => enumerable);
 
@@ -2509,7 +2517,7 @@ describe("Interpreter", () => {
 
         assert.isTrue(stub.calledOnceWith(expectedArg));
 
-        Elixir_Enum["into/2"].restore();
+        sandbox.restore();
       });
     });
   });
