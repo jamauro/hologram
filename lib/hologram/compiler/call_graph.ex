@@ -321,7 +321,13 @@ defmodule Hologram.Compiler.CallGraph do
       {:maps, :get, 3},
       {:maps, :is_key, 2},
       {:maps, :merge, 2},
-      {:maps, :put, 3}
+      {:maps, :put, 3},
+      # PATCH (component identity) — #injectInferredCid strips a keyed {%for}'s `__key__` off the
+      # props before the component sees them. Without this seed, a page whose reachable code never
+      # happens to call Map.delete/2 ships no `:maps.remove/2`, and the FIRST component rendered
+      # inside a {%for} raises client-side. Nothing in the page's own source names the function, so
+      # the failure looks like a runtime rule about that page rather than a missing bundle entry.
+      {:maps, :remove, 2}
     ],
     type_class: [
       {:maps, :get, 3},
