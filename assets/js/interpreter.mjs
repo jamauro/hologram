@@ -837,7 +837,16 @@ export default class Interpreter {
       context.vars.__matched__ = {};
     }
 
-    if (Interpreter.#hasUnresolvedVariablePattern(right)) {
+    // PATCH (skip the value-side pattern scan under isMatched): the scan asks whether `right`
+    // contains an unresolved variable pattern, which is only possible at direct match-operator
+    // emission sites — a sub-match nested inside a pattern, e.g. `[[a | b] = [c | d]] = v`,
+    // where the encoder passes a pattern as `right` (always with raiseMatchError's default).
+    // Calls reached via isMatched (raiseMatchError: false) match already-evaluated values —
+    // clause args, case subjects, cons tails, comprehension elements — which cannot embed
+    // patterns, yet the scan walked their full structure: each `[h | t]` step of a recursive
+    // walk re-scanned a freshly sliced tail (the identity-keyed cache never hits a new term),
+    // turning every list traversal quadratic. Measured as ~70% of scrollback-paging cost.
+    if (raiseMatchError && Interpreter.#hasUnresolvedVariablePattern(right)) {
       return Type.matchPattern(left, right);
     }
 
