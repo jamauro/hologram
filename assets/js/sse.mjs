@@ -195,8 +195,11 @@ export default class Sse {
   // combine them — no polling, no heartbeat watchdog. Offline dominates: a down network makes the
   // stale stream flag meaningless, and "reconnecting" over no network would be a lie.
   static currentStatus() {
-    if (typeof navigator !== "undefined" && navigator.onLine === false) return "offline";
-    return GlobalRegistry.get("sseConnected?") === true ? "live" : "reconnecting";
+    if (typeof navigator !== "undefined" && navigator.onLine === false)
+      return "offline";
+    return GlobalRegistry.get("sseConnected?") === true
+      ? "live"
+      : "reconnecting";
   }
 
   // Push the derived status to the layout (always-mounted root, cid "layout") so connection-status
@@ -206,7 +209,15 @@ export default class Sse {
   static publishStatus() {
     const status = $.currentStatus();
 
-    if (status !== $.lastStatus && ComponentRegistry.isCidRegistered(Type.bitstring("layout"))) {
+    const layoutCid = Type.bitstring("layout");
+
+    // The layout has to have opted in: connection-status UI is a feature an app either wants or
+    // doesn't, and a layout that handles no actions at all has no action/3 to land on.
+    if (
+      status !== $.lastStatus &&
+      ComponentRegistry.isCidRegistered(layoutCid) &&
+      Hologram.handlesAction(layoutCid, "connection_changed")
+    ) {
       $.lastStatus = status;
       Hologram.dispatchAction("connection_changed", "layout", {status});
     }
@@ -218,8 +229,12 @@ export default class Sse {
   // reconnecting → live deterministically, instead of depending on whether the socket happened to
   // survive. Armed once; guarded for the Node test env.
   static installNetworkListeners() {
-    if ($.networkListenersInstalled || typeof window === "undefined" ||
-        typeof window.addEventListener !== "function") return;
+    if (
+      $.networkListenersInstalled ||
+      typeof window === "undefined" ||
+      typeof window.addEventListener !== "function"
+    )
+      return;
     $.networkListenersInstalled = true;
 
     window.addEventListener("offline", () => $.publishStatus());

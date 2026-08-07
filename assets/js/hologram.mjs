@@ -185,6 +185,18 @@ export default class Hologram {
     return target;
   }
 
+  // PATCH (action bubbling) — public probe for OPTIONAL signals. A dispatch that no user code asked
+  // for (the connection-status push) must not raise on a layout that never opted in: the bubbling
+  // walk returns the original target when nothing handles the name, so the dispatch would land on a
+  // layout with no action/3 at all.
+  static handlesAction(cid, actionName) {
+    const module = ComponentRegistry.getComponentModule(cid);
+
+    return (
+      module !== null && Hologram.#handlesAction(module, Type.atom(actionName))
+    );
+  }
+
   static #handlesAction(module, name) {
     const moduleProxy = Interpreter.moduleProxy(module);
 
@@ -200,7 +212,9 @@ export default class Hologram {
       return actionNames.value === "any";
     }
 
-    return actionNames.data.some((actionName) => actionName.value === name.value);
+    return actionNames.data.some(
+      (actionName) => actionName.value === name.value,
+    );
   }
 
   static executeAction(action) {
@@ -604,7 +618,9 @@ export default class Hologram {
 
     Hologram.#dirtyCids = [];
 
-    let fallbackReason = Hologram.#fullRenderRequired ? "required" : "nothing dirty";
+    let fallbackReason = Hologram.#fullRenderRequired
+      ? "required"
+      : "nothing dirty";
 
     // Escape hatch, and the only honest way to A/B the two paths in one build:
     //   globalThis.Hologram.disableSubtreeRender = true
@@ -632,7 +648,9 @@ export default class Hologram {
   static #renderDirtySubtrees(dirty, startTime) {
     // A dirty component nested under another dirty one is rendered by that ancestor's pass, and
     // rendering it separately first would patch DOM the ancestor is about to replace.
-    const outermost = dirty.filter(({cid}) => !Hologram.#hasDirtyAncestor(cid, dirty));
+    const outermost = dirty.filter(
+      ({cid}) => !Hologram.#hasDirtyAncestor(cid, dirty),
+    );
     const results = [];
 
     for (const {cid} of outermost) {
