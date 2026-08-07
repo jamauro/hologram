@@ -287,6 +287,24 @@ defmodule Hologram.Compiler do
   @spec build_runtime_js(list(mfa), PLT.t(), MapSet.t(mfa), keyword(String.t()), T.file_path()) ::
           String.t()
   def build_runtime_js(runtime_mfas, ir_plt, async_mfas, app_versions, js_dir) do
+    # A module reachable from more than one page is bundled HERE rather than into each page, and
+    # `js_import` bindings used to be emitted only by the page path - so a component that moved into
+    # the runtime bundle silently lost them, and its `JS.call/2,3` found nothing to call. Nothing
+    # names the missing binding: the failure surfaces as the imported function not being a function.
+    %{imports: imports, bindings: bindings} = aggregate_js_imports(runtime_mfas)
+
+    import_statements =
+      imports
+      |> Enum.map_join("\n", fn %{from: from, export: export, alias: alias} ->
+        ~s'import { #{export} as #{alias} } from "#{from}";'
+      end)
+      |> render_block()
+
+    js_bindings_registration_call =
+      bindings
+      |> render_js_bindings_registration_call()
+      |> render_block()
+
     erlang_function_defs =
       runtime_mfas
       |> render_erlang_function_defs(Path.join(js_dir, "erlang"))
@@ -319,13 +337,13 @@ defmodule Hologram.Compiler do
     import MemoryStorage from "#{js_dir}/memory_storage.mjs";
     import PerformanceTimer from "#{js_dir}/performance_timer.mjs";
     import Type from "#{js_dir}/type.mjs";
-    import Utils from "#{js_dir}/utils.mjs";
+    import Utils from "#{js_dir}/utils.mjs";#{import_statements}
 
     const startTime = PerformanceTimer.start();
 
     globalThis.Hologram.config = #{render_client_config()};
 
-    ERTS.appVersions = #{render_app_versions(app_versions)};#{module_metadata_registration}#{erlang_function_defs}#{elixir_function_defs}#{manually_ported_clause_heads}
+    ERTS.appVersions = #{render_app_versions(app_versions)};#{module_metadata_registration}#{js_bindings_registration_call}#{erlang_function_defs}#{elixir_function_defs}#{manually_ported_clause_heads}
 
     document.addEventListener("hologram:pageScriptLoaded", () => Hologram.run());
 
