@@ -916,6 +916,9 @@ export default class Hologram {
       "message/1",
       "public",
       ManuallyPortedElixirFunctionClauseError["message/1"],
+    );
+
+    Interpreter.defineManuallyPortedFunction(
       "Enum",
       "drop/2",
       "public",
