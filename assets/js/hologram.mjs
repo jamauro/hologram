@@ -613,6 +613,44 @@ export default class Hologram {
 
   // Made public to make tests easier
   static render() {
+    // A render must never run INSIDE one already in progress. The nested render patches the DOM
+    // under the outer patch's feet, and when the outer patch resumes it walks `elm` references the
+    // inner one invalidated - `removeChild` throws NotFoundError and the REST OF THE OUTER PATCH
+    // IS ABANDONED, which surfaces as lost rows and blocks that never appear rather than as the
+    // error that caused them.
+    //
+    // The re-entrant path is a synchronous DOM event delivered mid-patch: Chrome dispatches
+    // focusout INSIDE remove(), so removing a focused element during a patch runs the document's
+    // focusout listener, which flushes that element's pending debounced dispatch, whose action
+    // renders. Nothing about it is debounce-specific - any synchronous event that reaches a
+    // dispatch while patching arrives the same way.
+    //
+    // Deferring costs nothing: the action has already run and its state is already committed, so
+    // only the DOM catch-up moves, to immediately after the patch that was in flight.
+    if (Hologram.#rendering) {
+      Hologram.#renderRequested = true;
+      return;
+    }
+
+    Hologram.#rendering = true;
+
+    try {
+      // A loop rather than recursion: a render requested mid-render runs on the same stack depth
+      // as the one it followed, so a chain of them can't grow the stack.
+      do {
+        Hologram.#renderRequested = false;
+        Hologram.#renderOnce();
+      } while (Hologram.#renderRequested);
+    } finally {
+      Hologram.#rendering = false;
+      Hologram.#renderRequested = false;
+    }
+  }
+
+  static #rendering = false;
+  static #renderRequested = false;
+
+  static #renderOnce() {
     const startTime = performance.now();
     const dirty = Hologram.#dirtyCids;
 
