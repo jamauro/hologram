@@ -2,13 +2,13 @@
 
 import {
   assert,
-  defineGlobalErlangAndElixirModules,
+  defineRuntimeGlobals,
 } from "../support/helpers.mjs";
 
 import VisibleEvent from "../../../assets/js/events/visible_event.mjs";
 import Type from "../../../assets/js/type.mjs";
 
-defineGlobalErlangAndElixirModules();
+defineRuntimeGlobals();
 
 describe("VisibleEvent", () => {
   describe("isEventIgnored()", () => {

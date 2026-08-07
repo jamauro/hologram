@@ -18,7 +18,9 @@ const properListData = (enumerable) => {
       // improper tail (drop/take can even return an improper remainder before that point).
       // Client-side error message is intentionally simplified.
       Interpreter.raiseFunctionClauseError(
-        Interpreter.buildFunctionClauseErrorMsg("Enumerable.List.reduce/3"),
+        "Enumerable.List",
+        "reduce",
+        3,
       );
     }
 
@@ -32,9 +34,9 @@ const Elixir_Enum = {
   // Deps: [Enum.to_list/1]
   "drop/2": function (enumerable, amount) {
     if (!Type.isInteger(amount)) {
-      Interpreter.raiseFunctionClauseError(
-        Interpreter.buildFunctionClauseErrorMsg("Enum.drop/2", arguments),
-      );
+      Interpreter.raiseFunctionClauseError("Enum", "drop", 2, [
+        ...arguments,
+      ]);
     }
 
     const data = properListData(enumerable);
@@ -65,9 +67,9 @@ const Elixir_Enum = {
   // Deps: [Enum.to_list/1]
   "take/2": function (enumerable, amount) {
     if (!Type.isInteger(amount)) {
-      Interpreter.raiseFunctionClauseError(
-        Interpreter.buildFunctionClauseErrorMsg("Enum.take/2", arguments),
-      );
+      Interpreter.raiseFunctionClauseError("Enum", "take", 2, [
+        ...arguments,
+      ]);
     }
 
     const data = properListData(enumerable);

@@ -13,9 +13,9 @@ const Elixir_List = {
 
   "last/2": function (list, defaultValue) {
     if (!Type.isList(list)) {
-      Interpreter.raiseFunctionClauseError(
-        Interpreter.buildFunctionClauseErrorMsg("List.last/2", arguments),
-      );
+      Interpreter.raiseFunctionClauseError("List", "last", 2, [
+        ...arguments,
+      ]);
     }
 
     if (list.data.length === 0) {
@@ -25,9 +25,7 @@ const Elixir_List = {
     if (!Type.isProperList(list)) {
       // The recursive clauses fail on the improper tail.
       // Client-side error message is intentionally simplified.
-      Interpreter.raiseFunctionClauseError(
-        Interpreter.buildFunctionClauseErrorMsg("List.last/2"),
-      );
+      Interpreter.raiseFunctionClauseError("List", "last", 2);
     }
 
     return list.data.at(-1);

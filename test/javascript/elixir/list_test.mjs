@@ -1,14 +1,15 @@
 import {
   assert,
   assertBoxedError,
-  defineGlobalErlangAndElixirModules,
+  buildFunctionClauseErrorMsg,
+  defineRuntimeGlobals,
 } from "../support/helpers.mjs";
 
 import Elixir_List from "../../../assets/js/elixir/list.mjs";
 import Interpreter from "../../../assets/js/interpreter.mjs";
 import Type from "../../../assets/js/type.mjs";
 
-defineGlobalErlangAndElixirModules();
+defineRuntimeGlobals();
 
 // IMPORTANT!
 // Each JavaScript test has a related Elixir consistency test in test/elixir/hologram/ex_js_consistency/elixir/list_test.exs
@@ -61,7 +62,7 @@ describe("Elixir_List", () => {
       assertBoxedError(
         () => last(Type.integer(123), Type.nil()),
         "FunctionClauseError",
-        Interpreter.buildFunctionClauseErrorMsg("List.last/2", [
+        buildFunctionClauseErrorMsg("List.last/2", [
           Type.integer(123),
           Type.nil(),
         ]),
@@ -72,7 +73,7 @@ describe("Elixir_List", () => {
       assertBoxedError(
         () => last(improperList, Type.nil()),
         "FunctionClauseError",
-        Interpreter.buildFunctionClauseErrorMsg("List.last/2"),
+        buildFunctionClauseErrorMsg("List.last/2"),
       );
     });
   });

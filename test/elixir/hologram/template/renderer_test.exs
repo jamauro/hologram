@@ -71,7 +71,6 @@ defmodule Hologram.Template.RendererTest do
   alias Hologram.Test.Fixtures.Template.Renderer.Module86
   alias Hologram.Test.Fixtures.Template.Renderer.Module87
   alias Hologram.Test.Fixtures.Template.Renderer.Module88
-  alias Hologram.Test.Fixtures.Template.Renderer.Module89
   alias Hologram.Test.Fixtures.Template.Renderer.Module90
   alias Hologram.Test.Fixtures.Template.Renderer.Module91
   alias Hologram.Test.Fixtures.Template.Renderer.Module92
@@ -1027,12 +1026,13 @@ defmodule Hologram.Template.RendererTest do
 
     test "a keyed {%for} gives each repeated component its identity, implicitly from the item id" do
       node =
-        {:component, Module94,
+        {:component, Module88,
          [{"cid", [text: "list"]}, {"items", [expression: {[%{id: "a"}, %{id: "b"}]}]}], []}
 
       {html, registry, _server} = render_dom(node, @env, @server)
 
-      assert html == "<span>a</span><span>b</span>"
+      assert html ==
+               "<!--[h:ts6lmf:0:o]--><span>a</span><span>b</span><!--[h:ts6lmf:0:c]-->"
       assert Enum.sort(Map.keys(registry)) == ["list", "list/a", "list/b"]
     end
 
@@ -1043,7 +1043,8 @@ defmodule Hologram.Template.RendererTest do
 
       {html, _registry, _server} = render_dom(node, @env, @server)
 
-      assert html == ~s(<div data-key="x">x</div><div data-key="y">y</div>)
+      assert html ==
+               ~s(<!--[h:isbhjo:0:o]--><div data-key="x">x</div><div data-key="y">y</div><!--[h:isbhjo:0:c]-->)
     end
 
     test "items without an id stay unkeyed" do
@@ -1052,7 +1053,7 @@ defmodule Hologram.Template.RendererTest do
 
       {html, _registry, _server} = render_dom(node, @env, @server)
 
-      assert html == "<div>1</div><div>2</div>"
+      assert html == "<!--[h:iey29:0:o]--><div>1</div><div>2</div><!--[h:iey29:0:c]-->"
     end
 
     test "a comma or a key: inside the generator's own expression is not the loop's key option" do
@@ -1062,7 +1063,8 @@ defmodule Hologram.Template.RendererTest do
 
       {html, _registry, _server} = render_dom(node, @env, @server)
 
-      assert html == ~s(<div data-key="a">a</div><div data-key="b">b</div>)
+      assert html ==
+               ~s(<!--[h:1bxbdo3:0:o]--><div data-key="a">a</div><div data-key="b">b</div><!--[h:1bxbdo3:0:c]-->)
     end
 
     test "a discarded binding leaves the loop unkeyed (and reads no underscored variable)" do
@@ -1070,7 +1072,8 @@ defmodule Hologram.Template.RendererTest do
 
       {html, _registry, _server} = render_dom(node, @env, @server)
 
-      assert html == "<div></div><div></div><div></div>"
+      assert html ==
+               "<!--[h:19nohbk:0:o]--><div></div><div></div><div></div><!--[h:19nohbk:0:c]-->"
     end
 
     test "an explicit cid prop wins over key/1 and stays unscoped" do

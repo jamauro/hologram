@@ -525,7 +525,10 @@ describe("Renderer", () => {
 
       const expected = vnode(
         "div",
-        {attrs: {attr_1: "aaa", attr_2: "123", attr_3: "ccc987eee"}, on: {}},
+        {
+          attrs: {attr_1: "aaa", attr_2: "123", attr_3: "ccc987eee"},
+          on: {},
+        },
         [],
       );
 
@@ -622,7 +625,10 @@ describe("Renderer", () => {
 
       const expected = vnode(
         "img",
-        {attrs: {attr_1: "aaa", attr_2: "123", attr_3: "ccc987eee"}, on: {}},
+        {
+          attrs: {attr_1: "aaa", attr_2: "123", attr_3: "ccc987eee"},
+          on: {},
+        },
         [],
       );
 
@@ -5986,6 +5992,7 @@ describe("Renderer", () => {
           [
             cid,
             componentRegistryEntryFixture({
+              context: Type.map(),
               module: module3,
               state: Type.map([
                 [Type.atom("a"), Type.integer(11)],
@@ -6213,6 +6220,7 @@ describe("Renderer", () => {
         [
           cid,
           componentRegistryEntryFixture({
+            context: Type.map(),
             module: Type.alias(
               "Hologram.Test.Fixtures.Template.Renderer.Module1",
             ),
@@ -6282,6 +6290,7 @@ describe("Renderer", () => {
         [
           cid,
           componentRegistryEntryFixture({
+            context: Type.map(),
             module: Type.alias(
               "Hologram.Test.Fixtures.Template.Renderer.Module2",
             ),
@@ -6309,6 +6318,7 @@ describe("Renderer", () => {
       ]);
 
       const entry = componentRegistryEntryFixture({
+        context: Type.map(),
         module: Type.alias("Hologram.Test.Fixtures.Template.Renderer.Module3"),
         state: Type.map([
           [Type.atom("a"), Type.integer(1)],
@@ -6601,6 +6611,7 @@ describe("Renderer", () => {
           [
             cid,
             componentRegistryEntryFixture({
+              context: Type.map(),
               module: module3,
               state: Type.map([
                 [Type.atom("a"), Type.integer(11)],
@@ -7159,6 +7170,7 @@ describe("Renderer", () => {
           [
             cid,
             componentRegistryEntryFixture({
+              context: Type.map(),
               module: Type.alias(
                 "Hologram.Test.Fixtures.Template.Renderer.Module1",
               ),
@@ -7265,6 +7277,7 @@ describe("Renderer", () => {
           [
             cid,
             componentRegistryEntryFixture({
+              context: Type.map(),
               module: Type.alias(
                 "Hologram.Test.Fixtures.Template.Renderer.Module1",
               ),

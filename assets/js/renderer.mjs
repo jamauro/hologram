@@ -2171,7 +2171,6 @@ export default class Renderer {
       Renderer.listenerBindings.push(...entry.bindings.listener);
       Renderer.reachBindings.push(...entry.bindings.reach);
       Renderer.resizeBindings.push(...entry.bindings.resize);
-      Renderer.intersectBindings.push(...entry.bindings.intersect);
 
       ComponentRegistry.putComponentContext(cid, entry.mergedContext);
 
@@ -2223,7 +2222,6 @@ export default class Renderer {
         listener: Renderer.listenerBindings.length,
         reach: Renderer.reachBindings.length,
         resize: Renderer.resizeBindings.length,
-        intersect: Renderer.intersectBindings.length,
       },
     };
 
@@ -2268,7 +2266,6 @@ export default class Renderer {
         listener: Renderer.listenerBindings.slice(frame.marks.listener),
         reach: Renderer.reachBindings.slice(frame.marks.reach),
         resize: Renderer.resizeBindings.slice(frame.marks.resize),
-        intersect: Renderer.intersectBindings.slice(frame.marks.intersect),
       },
     });
 

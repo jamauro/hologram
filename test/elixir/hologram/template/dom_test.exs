@@ -1527,7 +1527,7 @@ defmodule Hologram.Template.DOMTest do
                           ]}
                        ]}
                   ]
-                ]}
+                ]},
                {:public_comment, [text: "[h:2789se:0:c]"]}
              ]
     end
@@ -1600,7 +1600,25 @@ defmodule Hologram.Template.DOMTest do
                           {{:., [line: 1], [{:vars, [line: 1], nil}, :aaa]},
                            [no_parens: true, line: 1], []}
                         ]},
-                       [do: {:__block__, [], [[text: "bbb"]]}]
+                       [
+                         do:
+                           {:__block__, [],
+                            [
+                              {{:., [line: 1],
+                                [
+                                  {:__aliases__, [line: 1], [:Hologram, :Template, :DOM]},
+                                  :key_nodes
+                                ]}, [line: 1],
+                               [
+                                 {{:., [line: 1],
+                                   [
+                                     {:__aliases__, [line: 1], [:Hologram, :Template, :DOM]},
+                                     :default_key
+                                   ]}, [line: 1], [{:x, [line: 1], nil}]},
+                                 [text: "bbb"]
+                               ]}
+                            ]}
+                       ]
                      ]}
                   ]
                 ]}
@@ -1634,7 +1652,25 @@ defmodule Hologram.Template.DOMTest do
                             {{:., [line: 1], [{:vars, [line: 1], nil}, :bbb]},
                              [no_parens: true, line: 1], []}
                           ]},
-                         [do: {:__block__, [], [[text: "ccc"]]}]
+                         [
+                           do:
+                             {:__block__, [],
+                              [
+                                {{:., [line: 1],
+                                  [
+                                    {:__aliases__, [line: 1], [:Hologram, :Template, :DOM]},
+                                    :key_nodes
+                                  ]}, [line: 1],
+                                 [
+                                   {{:., [line: 1],
+                                     [
+                                       {:__aliases__, [line: 1], [:Hologram, :Template, :DOM]},
+                                       :default_key
+                                     ]}, [line: 1], [{:x, [line: 1], nil}]},
+                                   [text: "ccc"]
+                                 ]}
+                              ]}
+                         ]
                        ]},
                       {:public_comment, [text: "[h:17h2ajb:1:c]"]}
                     ]
@@ -1665,7 +1701,25 @@ defmodule Hologram.Template.DOMTest do
                      {{:., [line: 1], [{:vars, [line: 1], nil}, :aaa]},
                       [no_parens: true, line: 1], []}
                    ]},
-                  [do: {:__block__, [], [[text: "bbb"]]}]
+                  [
+                    do:
+                      {:__block__, [],
+                       [
+                         {{:., [line: 1],
+                           [
+                             {:__aliases__, [line: 1], [:Hologram, :Template, :DOM]},
+                             :key_nodes
+                           ]}, [line: 1],
+                          [
+                            {{:., [line: 1],
+                              [
+                                {:__aliases__, [line: 1], [:Hologram, :Template, :DOM]},
+                                :default_key
+                              ]}, [line: 1], [{:x, [line: 1], nil}]},
+                            [text: "bbb"]
+                          ]}
+                       ]}
+                  ]
                 ]},
                {:public_comment, [text: "[h:17e67kg:0:c]"]},
                {:public_comment, [text: "[h:17e67kg:1:o]"]},

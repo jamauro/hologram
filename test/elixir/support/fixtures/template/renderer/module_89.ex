@@ -11,11 +11,6 @@ defmodule Hologram.Test.Fixtures.Template.Renderer.Module89 do
   @impl Component
   def template do
     ~HOLO"""
-    <div>
-      <Module88 row={%{id: "a"}} />
-      <Module88 row={%{id: "b"}} />
-    </div>
-=======
     <span>{@item.id}</span>
     """
   end

@@ -15,29 +15,26 @@ defmodule Mix.Tasks.Holo.Compiler.PageExFunSizesTest do
       normalize_newlines("""
       \[
         \{\{Hologram\.Test\.Fixtures\.Mix\.Tasks\.Holo\.Compiler\.PageExFunSizes\.Module1,
-          :template, 0\}, [[:alnum:]]+\},
-        \{\{Hologram\.Test\.Fixtures\.LayoutFixture, :template, 0\}, [[:alnum:]]+\},
+          :template, [[:alnum:]]+\}, [[:alnum:]]+\},
+        \{\{Hologram\.Test\.Fixtures\.LayoutFixture, :template, [[:alnum:]]+\}, [[:alnum:]]+\},
         \{\{Hologram\.Test\.Fixtures\.Mix\.Tasks\.Holo\.Compiler\.PageExFunSizes\.Module1,
-          :__route__, 0\}, [[:alnum:]]+\},
+          :__route__, [[:alnum:]]+\}, [[:alnum:]]+\},
         \{\{Hologram\.Test\.Fixtures\.Mix\.Tasks\.Holo\.Compiler\.PageExFunSizes\.Module1,
-          :__layout_module__, 0\}, [[:alnum:]]+\},
-        \{\{Hologram\.Test\.Fixtures\.LayoutFixture, :init, 2\}, [[:alnum:]]+\},
+          :__params__, [[:alnum:]]+\}, [[:alnum:]]+\},
         \{\{Hologram\.Test\.Fixtures\.Mix\.Tasks\.Holo\.Compiler\.PageExFunSizes\.Module1,
-          :__params__, 0\}, [[:alnum:]]+\},
-        \{\{Hologram\.Test\.Fixtures\.LayoutFixture, :resume, 1\}, [[:alnum:]]+\},
+          :__layout_module__, [[:alnum:]]+\}, [[:alnum:]]+\},
+        \{\{Hologram\.Test\.Fixtures\.LayoutFixture, :__props__, [[:alnum:]]+\}, [[:alnum:]]+\},
         \{\{Hologram\.Test\.Fixtures\.Mix\.Tasks\.Holo\.Compiler\.PageExFunSizes\.Module1,
-          :__action_names__, 0\}, [[:alnum:]]+\},
+          :__action_names__, [[:alnum:]]+\}, [[:alnum:]]+\},
         \{\{Hologram\.Test\.Fixtures\.Mix\.Tasks\.Holo\.Compiler\.PageExFunSizes\.Module1,
-          :__layout_module__, 0\}, [[:alnum:]]+\},
-        \{\{Hologram\.Test\.Fixtures\.LayoutFixture, :__props__, 0\}, [[:alnum:]]+\},
+          :__layout_props__, [[:alnum:]]+\}, [[:alnum:]]+\},
+        \{\{Hologram\.Test\.Fixtures\.LayoutFixture, :init, [[:alnum:]]+\}, [[:alnum:]]+\},
         \{\{Hologram\.Test\.Fixtures\.Mix\.Tasks\.Holo\.Compiler\.PageExFunSizes\.Module1,
-          :__layout_props__, 0\}, [[:alnum:]]+\},
+          :fun_1, [[:alnum:]]+\}, [[:alnum:]]+\},
         \{\{Hologram\.Test\.Fixtures\.Mix\.Tasks\.Holo\.Compiler\.PageExFunSizes\.Module1,
-          :fun_1, 0\}, [[:alnum:]]+\},
-        \{\{Hologram\.Test\.Fixtures\.Mix\.Tasks\.Holo\.Compiler\.PageExFunSizes\.Module1,
-          :fun_2, 0\}, [[:alnum:]]+\},
-        \{\{Hologram\.Test\.Fixtures\.LayoutFixture, :__props__, 0\}, [[:alnum:]]+\},
-        \{\{Hologram\.Test\.Fixtures\.LayoutFixture, :__action_names__, 0\}, [[:alnum:]]+\}
+          :fun_2, [[:alnum:]]+\}, [[:alnum:]]+\},
+        \{\{Hologram\.Test\.Fixtures\.LayoutFixture, :resume, [[:alnum:]]+\}, [[:alnum:]]+\},
+        \{\{Hologram\.Test\.Fixtures\.LayoutFixture, :__action_names__, [[:alnum:]]+\}, [[:alnum:]]+\}
       \]
       """)
 

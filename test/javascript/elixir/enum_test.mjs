@@ -1,8 +1,9 @@
 import {
   assert,
   assertBoxedError,
+  buildFunctionClauseErrorMsg,
   contextFixture,
-  defineGlobalErlangAndElixirModules,
+  defineRuntimeGlobals,
 } from "../support/helpers.mjs";
 
 import Elixir_Enum from "../../../assets/js/elixir/enum.mjs";
@@ -10,7 +11,7 @@ import Erlang from "../../../assets/js/erlang/erlang.mjs";
 import Interpreter from "../../../assets/js/interpreter.mjs";
 import Type from "../../../assets/js/type.mjs";
 
-defineGlobalErlangAndElixirModules();
+defineRuntimeGlobals();
 
 // IMPORTANT!
 // Each JavaScript test has a related Elixir consistency test in test/elixir/hologram/ex_js_consistency/elixir/enum_test.exs
@@ -92,7 +93,7 @@ describe("Elixir_Enum", () => {
       assertBoxedError(
         () => drop(list, Type.atom("abc")),
         "FunctionClauseError",
-        Interpreter.buildFunctionClauseErrorMsg("Enum.drop/2", [
+        buildFunctionClauseErrorMsg("Enum.drop/2", [
           list,
           Type.atom("abc"),
         ]),
@@ -103,7 +104,7 @@ describe("Elixir_Enum", () => {
       assertBoxedError(
         () => drop(improperList, Type.integer(5)),
         "FunctionClauseError",
-        Interpreter.buildFunctionClauseErrorMsg("Enumerable.List.reduce/3"),
+        buildFunctionClauseErrorMsg("Enumerable.List.reduce/3"),
       );
     });
 
@@ -162,7 +163,7 @@ describe("Elixir_Enum", () => {
       assertBoxedError(
         () => findIndex(improperList, eqFun(4)),
         "FunctionClauseError",
-        Interpreter.buildFunctionClauseErrorMsg("Enumerable.List.reduce/3"),
+        buildFunctionClauseErrorMsg("Enumerable.List.reduce/3"),
       );
     });
 
@@ -221,7 +222,7 @@ describe("Elixir_Enum", () => {
       assertBoxedError(
         () => take(list, Type.atom("abc")),
         "FunctionClauseError",
-        Interpreter.buildFunctionClauseErrorMsg("Enum.take/2", [
+        buildFunctionClauseErrorMsg("Enum.take/2", [
           list,
           Type.atom("abc"),
         ]),
@@ -232,7 +233,7 @@ describe("Elixir_Enum", () => {
       assertBoxedError(
         () => take(improperList, Type.integer(5)),
         "FunctionClauseError",
-        Interpreter.buildFunctionClauseErrorMsg("Enumerable.List.reduce/3"),
+        buildFunctionClauseErrorMsg("Enumerable.List.reduce/3"),
       );
     });
 
