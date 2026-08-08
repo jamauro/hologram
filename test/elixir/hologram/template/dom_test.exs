@@ -2415,6 +2415,98 @@ defmodule Hologram.Template.DOMTest do
            ]
   end
 
+  describe "key_nodes/2" do
+    test "nil key returns the nodes untouched" do
+      nodes = [{:text, "abc"}, {:element, "div", [], []}]
+
+      assert key_nodes(nil, nodes) == nodes
+    end
+
+    test "keys the first component when there is one" do
+      nodes = [
+        {:text, "abc"},
+        {:component, Aaa.Bbb, [], []},
+        {:component, Ccc.Ddd, [], []}
+      ]
+
+      assert key_nodes("k1", nodes) == [
+               {:text, "abc"},
+               {:component, Aaa.Bbb, [{"__key__", [expression: {"k1"}]}], []},
+               {:component, Ccc.Ddd, [], []}
+             ]
+    end
+
+    test "keys the first element when there is no component" do
+      nodes = [{:text, "abc"}, {:element, "div", [], []}, {:element, "span", [], []}]
+
+      assert key_nodes("k1", nodes) == [
+               {:text, "abc"},
+               {:element, "div", [{"data-key", [expression: {"k1"}]}], []},
+               {:element, "span", [], []}
+             ]
+    end
+
+    test "qualifies top-level block markers with a binary key" do
+      nodes = [
+        {:public_comment, [text: "[h:1a2b3c:0:o]"]},
+        {:text, "abc"},
+        {:public_comment, [text: "[h:1a2b3c:0:c]"]},
+        {:element, "div", [], []}
+      ]
+
+      assert key_nodes("9f31-4c", nodes) == [
+               {:public_comment, [text: "[h:1a2b3c:0:9f31-4c:o]"]},
+               {:text, "abc"},
+               {:public_comment, [text: "[h:1a2b3c:0:9f31-4c:c]"]},
+               {:element, "div", [{"data-key", [expression: {"9f31-4c"}]}], []}
+             ]
+    end
+
+    test "qualifies markers with an integer key rendered in decimal" do
+      nodes = [
+        {:public_comment, [text: "[h:1a2b3c:0:o]"]},
+        {:element, "div", [], []},
+        {:public_comment, [text: "[h:1a2b3c:0:c]"]}
+      ]
+
+      assert [
+               {:public_comment, [text: "[h:1a2b3c:0:20293:o]"]},
+               {:element, "div", _attrs, []},
+               {:public_comment, [text: "[h:1a2b3c:0:20293:c]"]}
+             ] = key_nodes(20_293, nodes)
+    end
+
+    test "does not descend into element children" do
+      inner = [{:public_comment, [text: "[h:1a2b3c:1:o]"]}]
+      nodes = [{:element, "div", [], inner}]
+
+      assert [{:element, "div", [{"data-key", _value}], ^inner}] = key_nodes("k1", nodes)
+    end
+
+    test "leaves markers bare for a key a comment can't carry, while still keying the element" do
+      nodes = [
+        {:public_comment, [text: "[h:1a2b3c:0:o]"]},
+        {:element, "div", [], []},
+        {:public_comment, [text: "[h:1a2b3c:0:c]"]}
+      ]
+
+      for bad_key <- ["a:b", "a]b", "a--b", "", {:tuple, "key"}] do
+        assert [
+                 {:public_comment, [text: "[h:1a2b3c:0:o]"]},
+                 {:element, "div", [{"data-key", [expression: {^bad_key}]}], []},
+                 {:public_comment, [text: "[h:1a2b3c:0:c]"]}
+               ] = key_nodes(bad_key, nodes)
+      end
+    end
+
+    test "leaves an ordinary comment alone even when its text starts with [h:" do
+      nodes = [{:public_comment, [text: "[h: an authored aside]"]}, {:element, "div", [], []}]
+
+      assert [{:public_comment, [text: "[h: an authored aside]"]} | _rest] =
+               key_nodes("k1", nodes)
+    end
+  end
+
   defp marker_markers(ast) do
     ast
     |> inspect(limit: :infinity)

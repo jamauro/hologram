@@ -26,6 +26,13 @@ const patch = init([attributesModule, eventListenersModule], undefined, {
 // The module hash is what keeps keys unique: slot splicing merges nodes from different templates
 // into one children list, where bare block indexes would collide.
 //
+// A keyed {%for} inserts an optional fifth segment before the side — the iteration's key, written
+// by DOM.key_nodes/2 on both server and client — so a block repeated across iterations reaches
+// its final children list already uniquely keyed, by the item that rendered it rather than by the
+// position it happens to occupy. The segment can hold any text that doesn't contain ":" or "]"
+// (key_nodes refuses keys that would), which is exactly what keeps markerOpenKey's ":o]" probe
+// and matchingCloseIndex's ":o]" -> ":c]" rewrite unambiguous without parsing the segment.
+//
 // Markers bracket a template block so that changing how many nodes the block renders can't shift
 // the identity of the block's siblings. The diff pairs keyless children by tag and position, so
 // an unbracketed block that starts rendering an extra node lets a sibling be matched against the
@@ -35,7 +42,7 @@ const patch = init([attributesModule, eventListenersModule], undefined, {
 // diffs against a vdom derived from server-rendered markup, and a comment's own text is the only
 // carrier that round-trips. Unkeyed markers would be matched against unrelated comments, which
 // desyncs the pairing and reopens the same failure.
-const MARKER_KEY_REGEX = /^\[h:[a-z0-9]+:\d+:[oc]\]$/;
+const MARKER_KEY_REGEX = /^\[h:[a-z0-9]+:\d+(:[^:\]]+)?:[oc]\]$/;
 
 export default class Vdom {
   // PATCH (hydration-adopt) — downstream fork patch; see hologram.mjs #onReady.
@@ -151,6 +158,12 @@ export default class Vdom {
   // same list - a loop whose body holds a block, or the same component placed twice. Keys have to
   // be unique among siblings, since the diff indexes them by key and a repeat makes it reach for a
   // node it has already consumed.
+  //
+  // A KEYED {%for}'s repeats never arrive here: key_nodes/2 qualifies their marker text with the
+  // iteration key, so they are distinct before any list sees them. What this numbering still
+  // covers is repetition without a declared identity - unkeyed loops and the same component placed
+  // twice - where position IS the only identity there is, and a positional suffix is exactly as
+  // stable as the thing it numbers.
   //
   // Only the vnode key is renumbered, never the comment's text, so server-rendered and
   // client-rendered markup stay byte-identical. Both sides walk a children list in document order,

@@ -15,10 +15,13 @@ registerWebApis();
 describe("Vdom", () => {
   describe("addKeysToVnodes()", () => {
     it("element node that is not a link or script", () => {
-      const node = vnode("img", {attrs: {src: "my_src"}}, []);
+      const node = vnode("img", { attrs: { src: "my_src" } }, []);
       Vdom.addKeysToVnodes(node);
 
-      assert.deepStrictEqual(node, vnode("img", {attrs: {src: "my_src"}}, []));
+      assert.deepStrictEqual(
+        node,
+        vnode("img", { attrs: { src: "my_src" } }, []),
+      );
     });
 
     it("text node", () => {
@@ -57,7 +60,7 @@ describe("Vdom", () => {
 
         assert.deepStrictEqual(
           node,
-          vnode("!", {key: "[h:1a2b3c:0:o]"}, "[h:1a2b3c:0:o]"),
+          vnode("!", { key: "[h:1a2b3c:0:o]" }, "[h:1a2b3c:0:o]"),
         );
       });
 
@@ -67,14 +70,37 @@ describe("Vdom", () => {
 
         assert.deepStrictEqual(
           node,
-          vnode("!", {key: "[h:1a2b3c:0:c]"}, "[h:1a2b3c:0:c]"),
+          vnode("!", { key: "[h:1a2b3c:0:c]" }, "[h:1a2b3c:0:c]"),
         );
+      });
+
+      it("block marker qualified by an iteration key", () => {
+        const node = vnode("!", "[h:1a2b3c:0:9f31-4c:o]");
+        Vdom.addKeysToVnodes(node);
+
+        assert.deepStrictEqual(
+          node,
+          vnode(
+            "!",
+            { key: "[h:1a2b3c:0:9f31-4c:o]" },
+            "[h:1a2b3c:0:9f31-4c:o]",
+          ),
+        );
+      });
+
+      it("marker-shaped comment with a colon in the extra segment", () => {
+        // The iteration-key segment can't contain ":" (key_nodes/2 refuses such keys),
+        // so a six-segment comment is an ordinary comment.
+        const node = vnode("!", "[h:1a2b3c:0:a:b:o]");
+        Vdom.addKeysToVnodes(node);
+
+        assert.deepStrictEqual(node, vnode("!", "[h:1a2b3c:0:a:b:o]"));
       });
 
       it("nested block markers", () => {
         const node = vnode("div", {}, [
           vnode("!", "[h:1a2b3c:0:o]"),
-          vnode("img", {attrs: {src: "my_src"}}, []),
+          vnode("img", { attrs: { src: "my_src" } }, []),
           vnode("!", "[h:1a2b3c:0:c]"),
         ]);
 
@@ -104,24 +130,27 @@ describe("Vdom", () => {
       });
 
       it("without href attribute, but with some other attribute", () => {
-        const node = vnode("link", {attrs: {rel: "stylesheet"}}, []);
+        const node = vnode("link", { attrs: { rel: "stylesheet" } }, []);
         Vdom.addKeysToVnodes(node);
 
         assert.deepStrictEqual(
           node,
-          vnode("link", {attrs: {rel: "stylesheet"}}, []),
+          vnode("link", { attrs: { rel: "stylesheet" } }, []),
         );
       });
 
       it("with boolean href attribute", () => {
-        const node = vnode("link", {attrs: {href: true}}, []);
+        const node = vnode("link", { attrs: { href: true } }, []);
         Vdom.addKeysToVnodes(node);
 
-        assert.deepStrictEqual(node, vnode("link", {attrs: {href: true}}, []));
+        assert.deepStrictEqual(
+          node,
+          vnode("link", { attrs: { href: true } }, []),
+        );
       });
 
       it("with non-empty string href attribute", () => {
-        const node = vnode("link", {attrs: {href: "my_link"}}, []);
+        const node = vnode("link", { attrs: { href: "my_link" } }, []);
         Vdom.addKeysToVnodes(node);
 
         assert.deepStrictEqual(
@@ -130,7 +159,7 @@ describe("Vdom", () => {
             "link",
             {
               key: "__hologramLink__:my_link",
-              attrs: {href: "my_link"},
+              attrs: { href: "my_link" },
             },
             [],
           ),
@@ -139,9 +168,9 @@ describe("Vdom", () => {
 
       it("nested link nodes", () => {
         const node = vnode("div", {}, [
-          vnode("link", {attrs: {href: "my_link_1"}}, []),
-          vnode("img", {attrs: {src: "my_src"}}, []),
-          vnode("link", {attrs: {href: "my_link_2"}}, []),
+          vnode("link", { attrs: { href: "my_link_1" } }, []),
+          vnode("img", { attrs: { src: "my_src" } }, []),
+          vnode("link", { attrs: { href: "my_link_2" } }, []),
         ]);
 
         Vdom.addKeysToVnodes(node);
@@ -153,16 +182,16 @@ describe("Vdom", () => {
               "link",
               {
                 key: "__hologramLink__:my_link_1",
-                attrs: {href: "my_link_1"},
+                attrs: { href: "my_link_1" },
               },
               [],
             ),
-            vnode("img", {attrs: {src: "my_src"}}, []),
+            vnode("img", { attrs: { src: "my_src" } }, []),
             vnode(
               "link",
               {
                 key: "__hologramLink__:my_link_2",
-                attrs: {href: "my_link_2"},
+                attrs: { href: "my_link_2" },
               },
               [],
             ),
@@ -180,24 +209,31 @@ describe("Vdom", () => {
       });
 
       it("without src attribute (inline script), but with some other attribute", () => {
-        const node = vnode("script", {attrs: {type: "text/javascript"}}, []);
+        const node = vnode(
+          "script",
+          { attrs: { type: "text/javascript" } },
+          [],
+        );
         Vdom.addKeysToVnodes(node);
 
         assert.deepStrictEqual(
           node,
-          vnode("script", {attrs: {type: "text/javascript"}}, []),
+          vnode("script", { attrs: { type: "text/javascript" } }, []),
         );
       });
 
       it("with boolean src attribute", () => {
-        const node = vnode("script", {attrs: {src: true}}, []);
+        const node = vnode("script", { attrs: { src: true } }, []);
         Vdom.addKeysToVnodes(node);
 
-        assert.deepStrictEqual(node, vnode("script", {attrs: {src: true}}, []));
+        assert.deepStrictEqual(
+          node,
+          vnode("script", { attrs: { src: true } }, []),
+        );
       });
 
       it("with non-empty string src attribute", () => {
-        const node = vnode("script", {attrs: {src: "my_src"}}, []);
+        const node = vnode("script", { attrs: { src: "my_src" } }, []);
         Vdom.addKeysToVnodes(node);
 
         assert.deepStrictEqual(
@@ -206,7 +242,7 @@ describe("Vdom", () => {
             "script",
             {
               key: "__hologramScript__:my_src",
-              attrs: {src: "my_src"},
+              attrs: { src: "my_src" },
             },
             [],
           ),
@@ -215,9 +251,9 @@ describe("Vdom", () => {
 
       it("nested script nodes", () => {
         const node = vnode("div", {}, [
-          vnode("script", {attrs: {src: "my_src_1"}}, []),
-          vnode("img", {attrs: {src: "my_src"}}, []),
-          vnode("script", {attrs: {src: "my_src_2"}}, []),
+          vnode("script", { attrs: { src: "my_src_1" } }, []),
+          vnode("img", { attrs: { src: "my_src" } }, []),
+          vnode("script", { attrs: { src: "my_src_2" } }, []),
         ]);
 
         Vdom.addKeysToVnodes(node);
@@ -229,16 +265,16 @@ describe("Vdom", () => {
               "script",
               {
                 key: "__hologramScript__:my_src_1",
-                attrs: {src: "my_src_1"},
+                attrs: { src: "my_src_1" },
               },
               [],
             ),
-            vnode("img", {attrs: {src: "my_src"}}, []),
+            vnode("img", { attrs: { src: "my_src" } }, []),
             vnode(
               "script",
               {
                 key: "__hologramScript__:my_src_2",
-                attrs: {src: "my_src_2"},
+                attrs: { src: "my_src_2" },
               },
               [],
             ),
@@ -251,8 +287,8 @@ describe("Vdom", () => {
   describe("dedupeMarkerKeys()", () => {
     it("distinct marker keys", () => {
       const children = [
-        vnode("!", {key: "[h:1a2b3c:0:o]"}, "[h:1a2b3c:0:o]"),
-        vnode("!", {key: "[h:1a2b3c:0:c]"}, "[h:1a2b3c:0:c]"),
+        vnode("!", { key: "[h:1a2b3c:0:o]" }, "[h:1a2b3c:0:o]"),
+        vnode("!", { key: "[h:1a2b3c:0:c]" }, "[h:1a2b3c:0:c]"),
       ];
 
       Vdom.dedupeMarkerKeys(children);
@@ -265,9 +301,9 @@ describe("Vdom", () => {
 
     it("repeated marker keys", () => {
       const children = [
-        vnode("!", {key: "[h:1a2b3c:0:o]"}, "[h:1a2b3c:0:o]"),
-        vnode("!", {key: "[h:1a2b3c:0:o]"}, "[h:1a2b3c:0:o]"),
-        vnode("!", {key: "[h:1a2b3c:0:o]"}, "[h:1a2b3c:0:o]"),
+        vnode("!", { key: "[h:1a2b3c:0:o]" }, "[h:1a2b3c:0:o]"),
+        vnode("!", { key: "[h:1a2b3c:0:o]" }, "[h:1a2b3c:0:o]"),
+        vnode("!", { key: "[h:1a2b3c:0:o]" }, "[h:1a2b3c:0:o]"),
       ];
 
       Vdom.dedupeMarkerKeys(children);
@@ -280,8 +316,8 @@ describe("Vdom", () => {
 
     it("renumbers the vnode key without touching the comment text", () => {
       const children = [
-        vnode("!", {key: "[h:1a2b3c:0:o]"}, "[h:1a2b3c:0:o]"),
-        vnode("!", {key: "[h:1a2b3c:0:o]"}, "[h:1a2b3c:0:o]"),
+        vnode("!", { key: "[h:1a2b3c:0:o]" }, "[h:1a2b3c:0:o]"),
+        vnode("!", { key: "[h:1a2b3c:0:o]" }, "[h:1a2b3c:0:o]"),
       ];
 
       Vdom.dedupeMarkerKeys(children);
@@ -298,8 +334,8 @@ describe("Vdom", () => {
       const children = [
         vnode("!", "my comment"),
         vnode("!", "my comment"),
-        vnode("div", {attrs: {}}, []),
-        vnode("div", {attrs: {}}, []),
+        vnode("div", { attrs: {} }, []),
+        vnode("div", { attrs: {} }, []),
       ];
 
       Vdom.dedupeMarkerKeys(children);
@@ -307,6 +343,20 @@ describe("Vdom", () => {
       assert.deepStrictEqual(
         children.map((child) => child.key),
         [undefined, undefined, undefined, undefined],
+      );
+    });
+
+    it("iteration-key-qualified repeats have distinct base keys and are left alone", () => {
+      const children = [
+        vnode("!", { key: "[h:1a2b3c:0:k1:o]" }, "[h:1a2b3c:0:k1:o]"),
+        vnode("!", { key: "[h:1a2b3c:0:k2:o]" }, "[h:1a2b3c:0:k2:o]"),
+      ];
+
+      Vdom.dedupeMarkerKeys(children);
+
+      assert.deepStrictEqual(
+        children.map((child) => child.key),
+        ["[h:1a2b3c:0:k1:o]", "[h:1a2b3c:0:k2:o]"],
       );
     });
   });
@@ -318,12 +368,12 @@ describe("Vdom", () => {
 
       const result = Vdom.from(html);
 
-      const expected = vnode("html", {attrs: {lang: "en", class: "abc"}}, [
-        vnode("head", {attrs: {}}, []),
-        vnode("body", {attrs: {}}, [
-          vnode("div", {attrs: {attr1: "abc", attr2: true}}, []),
+      const expected = vnode("html", { attrs: { lang: "en", class: "abc" } }, [
+        vnode("head", { attrs: {} }, []),
+        vnode("body", { attrs: {} }, [
+          vnode("div", { attrs: { attr1: "abc", attr2: true } }, []),
           vnode("!", " my comment "),
-          vnode("span", {attrs: {}}, ["abc"]),
+          vnode("span", { attrs: {} }, ["abc"]),
         ]),
       ]);
 
@@ -368,10 +418,10 @@ describe("Vdom", () => {
           '<html><body><a href="my_href"></a></body></html>',
         );
 
-        const expected = vnode("html", {attrs: {}}, [
-          vnode("head", {attrs: {}}, []),
-          vnode("body", {attrs: {}}, [
-            vnode("a", {attrs: {href: "my_href"}}, []),
+        const expected = vnode("html", { attrs: {} }, [
+          vnode("head", { attrs: {} }, []),
+          vnode("body", { attrs: {} }, [
+            vnode("a", { attrs: { href: "my_href" } }, []),
           ]),
         ]);
 
@@ -383,11 +433,11 @@ describe("Vdom", () => {
           '<html><head><link ref="stylesheet" /></head></html>',
         );
 
-        const expected = vnode("html", {attrs: {}}, [
-          vnode("head", {attrs: {}}, [
-            vnode("link", {attrs: {ref: "stylesheet"}}, []),
+        const expected = vnode("html", { attrs: {} }, [
+          vnode("head", { attrs: {} }, [
+            vnode("link", { attrs: { ref: "stylesheet" } }, []),
           ]),
-          vnode("body", {attrs: {}}, []),
+          vnode("body", { attrs: {} }, []),
         ]);
 
         assert.deepStrictEqual(result, expected);
@@ -396,11 +446,11 @@ describe("Vdom", () => {
       it("link element with empty string href attribute", () => {
         const result = Vdom.from('<html><head><link href="" /></head></html>');
 
-        const expected = vnode("html", {attrs: {}}, [
-          vnode("head", {attrs: {}}, [
-            vnode("link", {attrs: {href: true}}, []),
+        const expected = vnode("html", { attrs: {} }, [
+          vnode("head", { attrs: {} }, [
+            vnode("link", { attrs: { href: true } }, []),
           ]),
-          vnode("body", {attrs: {}}, []),
+          vnode("body", { attrs: {} }, []),
         ]);
 
         assert.deepStrictEqual(result, expected);
@@ -409,11 +459,11 @@ describe("Vdom", () => {
       it("link element with boolean href attribute", () => {
         const result = Vdom.from("<html><head><link href /></head></html>");
 
-        const expected = vnode("html", {attrs: {}}, [
-          vnode("head", {attrs: {}}, [
-            vnode("link", {attrs: {href: true}}, []),
+        const expected = vnode("html", { attrs: {} }, [
+          vnode("head", { attrs: {} }, [
+            vnode("link", { attrs: { href: true } }, []),
           ]),
-          vnode("body", {attrs: {}}, []),
+          vnode("body", { attrs: {} }, []),
         ]);
 
         assert.deepStrictEqual(result, expected);
@@ -424,15 +474,15 @@ describe("Vdom", () => {
           '<html><head><link href="my_href" /></head></html>',
         );
 
-        const expected = vnode("html", {attrs: {}}, [
-          vnode("head", {attrs: {}}, [
+        const expected = vnode("html", { attrs: {} }, [
+          vnode("head", { attrs: {} }, [
             vnode(
               "link",
-              {key: "__hologramLink__:my_href", attrs: {href: "my_href"}},
+              { key: "__hologramLink__:my_href", attrs: { href: "my_href" } },
               [],
             ),
           ]),
-          vnode("body", {attrs: {}}, []),
+          vnode("body", { attrs: {} }, []),
         ]);
 
         assert.deepStrictEqual(result, expected);
@@ -445,10 +495,10 @@ describe("Vdom", () => {
           '<html><body><img src="my_src" /></body></html>',
         );
 
-        const expected = vnode("html", {attrs: {}}, [
-          vnode("head", {attrs: {}}, []),
-          vnode("body", {attrs: {}}, [
-            vnode("img", {attrs: {src: "my_src"}}, []),
+        const expected = vnode("html", { attrs: {} }, [
+          vnode("head", { attrs: {} }, []),
+          vnode("body", { attrs: {} }, [
+            vnode("img", { attrs: { src: "my_src" } }, []),
           ]),
         ]);
 
@@ -460,11 +510,11 @@ describe("Vdom", () => {
           '<html><head><script type="text/html"></script></head></html>',
         );
 
-        const expected = vnode("html", {attrs: {}}, [
-          vnode("head", {attrs: {}}, [
-            vnode("script", {attrs: {type: "text/html"}}, []),
+        const expected = vnode("html", { attrs: {} }, [
+          vnode("head", { attrs: {} }, [
+            vnode("script", { attrs: { type: "text/html" } }, []),
           ]),
-          vnode("body", {attrs: {}}, []),
+          vnode("body", { attrs: {} }, []),
         ]);
 
         assert.deepStrictEqual(result, expected);
@@ -475,11 +525,11 @@ describe("Vdom", () => {
           '<html><head><script src=""></script></head></html>',
         );
 
-        const expected = vnode("html", {attrs: {}}, [
-          vnode("head", {attrs: {}}, [
-            vnode("script", {attrs: {src: true}}, []),
+        const expected = vnode("html", { attrs: {} }, [
+          vnode("head", { attrs: {} }, [
+            vnode("script", { attrs: { src: true } }, []),
           ]),
-          vnode("body", {attrs: {}}, []),
+          vnode("body", { attrs: {} }, []),
         ]);
 
         assert.deepStrictEqual(result, expected);
@@ -490,11 +540,11 @@ describe("Vdom", () => {
           "<html><head><script src></script></head></html>",
         );
 
-        const expected = vnode("html", {attrs: {}}, [
-          vnode("head", {attrs: {}}, [
-            vnode("script", {attrs: {src: true}}, []),
+        const expected = vnode("html", { attrs: {} }, [
+          vnode("head", { attrs: {} }, [
+            vnode("script", { attrs: { src: true } }, []),
           ]),
-          vnode("body", {attrs: {}}, []),
+          vnode("body", { attrs: {} }, []),
         ]);
 
         assert.deepStrictEqual(result, expected);
@@ -505,15 +555,15 @@ describe("Vdom", () => {
           '<html><head><script src="my_src"></script></head></html>',
         );
 
-        const expected = vnode("html", {attrs: {}}, [
-          vnode("head", {attrs: {}}, [
+        const expected = vnode("html", { attrs: {} }, [
+          vnode("head", { attrs: {} }, [
             vnode(
               "script",
-              {key: "__hologramScript__:my_src", attrs: {src: "my_src"}},
+              { key: "__hologramScript__:my_src", attrs: { src: "my_src" } },
               [],
             ),
           ]),
-          vnode("body", {attrs: {}}, []),
+          vnode("body", { attrs: {} }, []),
         ]);
 
         assert.deepStrictEqual(result, expected);
@@ -524,15 +574,15 @@ describe("Vdom", () => {
           "<html><head><script>const x = 123;</script></head></html>",
         );
 
-        const expected = vnode("html", {attrs: {}}, [
-          vnode("head", {attrs: {}}, [
+        const expected = vnode("html", { attrs: {} }, [
+          vnode("head", { attrs: {} }, [
             vnode(
               "script",
-              {key: "__hologramScript__:const x = 123;", attrs: {}},
+              { key: "__hologramScript__:const x = 123;", attrs: {} },
               ["const x = 123;"],
             ),
           ]),
-          vnode("body", {attrs: {}}, []),
+          vnode("body", { attrs: {} }, []),
         ]);
 
         assert.deepStrictEqual(result, expected);
@@ -541,9 +591,9 @@ describe("Vdom", () => {
       it("script element with empty text content", () => {
         const result = Vdom.from("<html><head><script></script></head></html>");
 
-        const expected = vnode("html", {attrs: {}}, [
-          vnode("head", {attrs: {}}, [vnode("script", {attrs: {}}, [])]),
-          vnode("body", {attrs: {}}, []),
+        const expected = vnode("html", { attrs: {} }, [
+          vnode("head", { attrs: {} }, [vnode("script", { attrs: {} }, [])]),
+          vnode("body", { attrs: {} }, []),
         ]);
 
         assert.deepStrictEqual(result, expected);
@@ -551,7 +601,7 @@ describe("Vdom", () => {
     });
   });
   describe("groupBlockFragments()", () => {
-    const marker = (key) => vnode("!", {key}, key);
+    const marker = (key) => vnode("!", { key }, key);
 
     const keysOf = (children) =>
       children.map((child) =>
@@ -559,7 +609,7 @@ describe("Vdom", () => {
       );
 
     it("children list without markers is returned unchanged", () => {
-      const children = [vnode("div", {attrs: {}}, []), "abc"];
+      const children = [vnode("div", { attrs: {} }, []), "abc"];
       const result = Vdom.groupBlockFragments(children);
 
       assert.equal(result, children);
@@ -569,9 +619,9 @@ describe("Vdom", () => {
       const children = [
         "before",
         marker("[h:1a2b3c:0:o]"),
-        vnode("p", {attrs: {}}, []),
+        vnode("p", { attrs: {} }, []),
         marker("[h:1a2b3c:0:c]"),
-        vnode("input", {attrs: {}}, []),
+        vnode("input", { attrs: {} }, []),
       ];
 
       const result = Vdom.groupBlockFragments(children);
@@ -596,7 +646,7 @@ describe("Vdom", () => {
       const children = [
         marker("[h:1a2b3c:0:o]"),
         marker("[h:1a2b3c:0:c]"),
-        vnode("input", {attrs: {}}, []),
+        vnode("input", { attrs: {} }, []),
       ];
 
       const result = Vdom.groupBlockFragments(children);
@@ -609,7 +659,7 @@ describe("Vdom", () => {
       const children = [
         marker("[h:1a2b3c:0:o]"),
         marker("[h:1a2b3c:0:c]"),
-        vnode("input", {attrs: {}}, []),
+        vnode("input", { attrs: {} }, []),
         marker("[h:1a2b3c:1:o]"),
         marker("[h:1a2b3c:1:c]"),
       ];
@@ -623,11 +673,44 @@ describe("Vdom", () => {
       ]);
     });
 
+    it("one block qualified by two iteration keys becomes two distinct fragments", () => {
+      // The crash this guards against: the same block rendered by two keyed iterations,
+      // spliced into one list. Unqualified, both fragments would carry one key and the
+      // diff's keyed index would consume the slot twice.
+      const children = [
+        marker("[h:1a2b3c:0:k1:o]"),
+        vnode("p", { attrs: {} }, []),
+        marker("[h:1a2b3c:0:k1:c]"),
+        marker("[h:1a2b3c:0:k2:o]"),
+        vnode("p", { attrs: {} }, []),
+        marker("[h:1a2b3c:0:k2:c]"),
+      ];
+
+      const result = Vdom.groupBlockFragments(children);
+
+      assert.deepStrictEqual(keysOf(result), [
+        "[h:1a2b3c:0:k1:o]",
+        "[h:1a2b3c:0:k2:o]",
+      ]);
+
+      assert.deepStrictEqual(keysOf(result[0].children), [
+        "[h:1a2b3c:0:k1:o]",
+        "p",
+        "[h:1a2b3c:0:k1:c]",
+      ]);
+
+      assert.deepStrictEqual(keysOf(result[1].children), [
+        "[h:1a2b3c:0:k2:o]",
+        "p",
+        "[h:1a2b3c:0:k2:c]",
+      ]);
+    });
+
     it("nested spans become nested fragments", () => {
       const children = [
         marker("[h:1a2b3c:0:o]"),
         marker("[h:1a2b3c:1:o]"),
-        vnode("b", {attrs: {}}, []),
+        vnode("b", { attrs: {} }, []),
         marker("[h:1a2b3c:1:c]"),
         marker("[h:1a2b3c:0:c]"),
       ];
@@ -654,10 +737,10 @@ describe("Vdom", () => {
     it("renumbered repeats pair with their own closing side", () => {
       const children = [
         marker("[h:1a2b3c:0:o]"),
-        vnode("b", {attrs: {}}, []),
+        vnode("b", { attrs: {} }, []),
         marker("[h:1a2b3c:0:c]"),
         marker("[h:1a2b3c:0:o]:1"),
-        vnode("i", {attrs: {}}, []),
+        vnode("i", { attrs: {} }, []),
         marker("[h:1a2b3c:0:c]:1"),
       ];
 
@@ -681,7 +764,7 @@ describe("Vdom", () => {
       const children = [
         marker("[h:1a2b3c:0:o]"),
         marker("[h:1a2b3c:0:o]"),
-        vnode("p", {attrs: {}}, []),
+        vnode("p", { attrs: {} }, []),
         marker("[h:1a2b3c:0:c]"),
         marker("[h:1a2b3c:0:c]"),
       ];
@@ -712,7 +795,7 @@ describe("Vdom", () => {
         marker("[h:1a2b3c:0:o]"),
         marker("[h:1a2b3c:0:o]"),
         marker("[h:1a2b3c:0:o]"),
-        vnode("p", {attrs: {}}, []),
+        vnode("p", { attrs: {} }, []),
         marker("[h:1a2b3c:0:c]"),
         marker("[h:1a2b3c:0:c]"),
         marker("[h:1a2b3c:0:c]"),
@@ -756,7 +839,10 @@ describe("Vdom", () => {
     });
 
     it("opening marker without a matching close leaves the list flat", () => {
-      const children = [marker("[h:1a2b3c:0:o]"), vnode("p", {attrs: {}}, [])];
+      const children = [
+        marker("[h:1a2b3c:0:o]"),
+        vnode("p", { attrs: {} }, []),
+      ];
 
       const result = Vdom.groupBlockFragments(children);
 
@@ -770,9 +856,9 @@ describe("Vdom", () => {
       const [openNode, contentNode, closeNode] = [...container.childNodes];
 
       const children = [
-        {...marker("[h:1a2b3c:0:o]"), elm: openNode},
-        {...vnode("p", {attrs: {}}, []), elm: contentNode},
-        {...marker("[h:1a2b3c:0:c]"), elm: closeNode},
+        { ...marker("[h:1a2b3c:0:o]"), elm: openNode },
+        { ...vnode("p", { attrs: {} }, []), elm: contentNode },
+        { ...marker("[h:1a2b3c:0:c]"), elm: closeNode },
       ];
 
       const [blockFragment] = Vdom.groupBlockFragments(children);
@@ -793,7 +879,7 @@ describe("Vdom", () => {
     it("ordinary comments are left alone", () => {
       const children = [
         vnode("!", "my comment"),
-        vnode("div", {attrs: {}}, []),
+        vnode("div", { attrs: {} }, []),
       ];
       const result = Vdom.groupBlockFragments(children);
 
@@ -859,7 +945,7 @@ describe("Vdom", () => {
 
       const result = Vdom.fromLiveDom(el);
 
-      assert.deepStrictEqual(result.data.attrs, {"data-theme": "aurora"});
+      assert.deepStrictEqual(result.data.attrs, { "data-theme": "aurora" });
     });
 
     it("empty-valued attribute becomes true (the renderer's boolean-attr shape)", () => {
@@ -868,7 +954,7 @@ describe("Vdom", () => {
 
       const result = Vdom.fromLiveDom(el);
 
-      assert.deepStrictEqual(result.data.attrs, {hidden: true});
+      assert.deepStrictEqual(result.data.attrs, { hidden: true });
     });
 
     it("text child: a text VNODE (elm-bound), not a bare string", () => {

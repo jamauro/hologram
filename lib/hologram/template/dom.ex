@@ -84,6 +84,10 @@ defmodule Hologram.Template.DOM do
   #   0         index of the block within its template, counted in source order
   #   o         side of the pair, "o" opening or "c" closing
   #
+  # A keyed {%for} inserts a fifth segment before the side at render time — the iteration's key,
+  # see key_nodes/2 — so a block repeated across iterations keys each repeat by the item that
+  # rendered it.
+  #
   # The marker text doubles as the client-side vnode key, which is why it has to be part of the
   # markup: the client diffs against a virtual DOM derived from server-rendered HTML, and a
   # comment's own text is the only carrier that survives serialization. The client recognizes the
@@ -208,6 +212,17 @@ defmodule Hologram.Template.DOM do
   repeated thing is the component when there is one (the `{%if}` that may also sit in the loop body
   is a conditional decoration of it, not another instance).
 
+  The key is also written into the iteration's block markers: `[h:hash:idx:o]` becomes
+  `[h:hash:idx:key:o]`. A block in the loop body carries one marker from the compiler but renders
+  once per iteration, and each rendering is grouped into a keyed fragment inside its own
+  iteration's list — where it is unique, so per-list numbering never sees the repeats. Splicing
+  the iterations together would land every fragment on the same key, which the diff indexes,
+  consumes once, and then reads `undefined.sel` from. Position can't disambiguate them — a key
+  that encodes position among siblings is destroyed by the reorder it exists to survive — but the
+  iteration key can: it travels with the item. Rewriting the comment TEXT (not just a vnode key)
+  keeps server-rendered and client-rendered markup byte-identical, since this function runs on
+  both sides and boot re-derives keys from the serialized comments.
+
   A nil key returns the nodes untouched, and an explicit `cid` or `data-key` written at the call site
   is left alone — spelling it out beats the implicit key.
   """
@@ -215,6 +230,12 @@ defmodule Hologram.Template.DOM do
   def key_nodes(nil, nodes), do: nodes
 
   def key_nodes(key, nodes) do
+    nodes =
+      case marker_key_token(key) do
+        nil -> nodes
+        token -> qualify_block_markers(nodes, token)
+      end
+
     if has_component?(nodes) do
       key_first_component(nodes, key)
     else
@@ -259,6 +280,52 @@ defmodule Hologram.Template.DOM do
       node
     else
       {:element, tag, [{"data-key", [expression: {key}]} | attrs], children}
+    end
+  end
+
+  # The iteration key as a marker-text segment, or nil for a key that can't ride in a comment.
+  # ":" and "]" would break the marker's own delimiting, and "--" is the one sequence HTML forbids
+  # inside a comment (every dangerous form — "-->", "<!--", "--!>" — contains it; the token sits
+  # mid-text, so the start/end rules can't apply). A key rejected here falls back to unqualified
+  # markers — the behaviour without this rewrite — rather than emitting text the client-side
+  # marker pattern would silently refuse to key. One native contains? call, not a charset walk:
+  # this runs per iteration on the client, where every interpreted step is paid for.
+  defp marker_key_token(key) when is_integer(key), do: Integer.to_string(key)
+
+  defp marker_key_token(key) when is_binary(key) and byte_size(key) > 0 do
+    if String.contains?(key, [":", "]", "--"]), do: nil, else: key
+  end
+
+  defp marker_key_token(_key), do: nil
+
+  # Rewrites the top-level block markers of one iteration's nodes. Only the top level: a marker
+  # nested deeper is finalized inside a child element's or block's own list, where one iteration
+  # contributes one instance — it never meets its other-iteration twins as siblings, so it needs
+  # no qualification. Direct recursion for the same reason as has_component?/1 above.
+  defp qualify_block_markers(
+         [{:public_comment, [{:text, <<"[h:", _rest::binary>> = text}]} | rest],
+         token
+       ) do
+    [
+      {:public_comment, [{:text, qualify_marker_text(text, token)}]}
+      | qualify_block_markers(rest, token)
+    ]
+  end
+
+  defp qualify_block_markers([node | rest], token),
+    do: [node | qualify_block_markers(rest, token)]
+
+  defp qualify_block_markers([], _token), do: []
+
+  # An ordinary comment that merely starts with "[h:" doesn't end with a side segment and passes
+  # through unchanged.
+  defp qualify_marker_text(text, token) do
+    side = binary_part(text, byte_size(text) - 3, 3)
+
+    if side == ":o]" or side == ":c]" do
+      binary_part(text, 0, byte_size(text) - 3) <> ":" <> token <> side
+    else
+      text
     end
   end
 
