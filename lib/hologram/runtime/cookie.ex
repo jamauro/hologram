@@ -59,14 +59,21 @@ defmodule Hologram.Runtime.Cookie do
   def decode(plain_string), do: plain_string
 
   @doc """
-  Encodes a term into a Base64-encoded string with a Hologram-specific prefix.
+  Encodes a term for transport as a cookie value.
 
-  The term is first converted to binary using Erlang's term_to_binary/1, then
-  Base64-encoded without padding, and finally prefixed with "%H" to identify
-  it as a Hologram-encoded cookie value. The "%H" prefix is invalid in URL
-  encoding, ensuring clear distinction from other cookie formats.
+  A plain string passes through unchanged — `decode/1` already returns unprefixed strings
+  as-is, so the round-trip is lossless, and the value stays readable to whoever inspects the
+  cookie outside Hologram (an edge worker, a log, the browser devtools). Everything else is
+  converted with Erlang's term_to_binary/1, Base64-encoded without padding, and prefixed with
+  "%H" to identify it as a Hologram-encoded value. The "%H" prefix is invalid in URL encoding,
+  ensuring clear distinction from other cookie formats — which is also why the one string that
+  cannot pass through untouched is a string that itself starts with "%H": it would be
+  mistaken for an encoded term on the way back, so it gets wrapped like a term.
 
   ## Examples
+
+      iex> Cookie.encode("dark")
+      "dark"
 
       iex> Cookie.encode(:hello)
       "%Hg3cFaGVsbG8"
@@ -75,7 +82,15 @@ defmodule Hologram.Runtime.Cookie do
       "%Hg3QAAAABdwNrZXltAAAABXZhbHVl"
   """
   @spec encode(term()) :: String.t()
-  def encode(value) do
+  def encode(value)
+
+  def encode("%H" <> _rest = value), do: encode_term(value)
+
+  def encode(value) when is_binary(value), do: value
+
+  def encode(value), do: encode_term(value)
+
+  defp encode_term(value) do
     value
     |> :erlang.term_to_binary()
     |> Base.encode64(padding: false)

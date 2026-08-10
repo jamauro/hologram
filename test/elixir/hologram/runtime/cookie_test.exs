@@ -70,10 +70,22 @@ defmodule Hologram.Runtime.CookieTest do
   end
 
   describe "encode/1" do
-    test "encodes a string" do
-      result = Cookie.encode("hello world")
+    test "passes a plain string through unchanged" do
+      assert Cookie.encode("hello world") == "hello world"
+    end
 
-      assert result == "%Hg20AAAALaGVsbG8gd29ybGQ"
+    test "round-trips a plain string" do
+      assert Cookie.decode(Cookie.encode("hello world")) == "hello world"
+    end
+
+    test "wraps a string that starts with the %H marker" do
+      # Passed through raw it would be mistaken for an encoded term by decode/1.
+      value = "%Hsomething"
+      encoded = Cookie.encode(value)
+
+      assert String.starts_with?(encoded, "%H")
+      refute encoded == value
+      assert Cookie.decode(encoded) == value
     end
 
     test "encodes a non-string" do
@@ -90,7 +102,7 @@ defmodule Hologram.Runtime.CookieTest do
 
     test "encoded value contains no padding characters" do
       # If padding was applied the result would have a "=" character
-      result = Cookie.encode("Hologram")
+      result = Cookie.encode(:hologram)
 
       refute String.contains?(result, "=")
     end

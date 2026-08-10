@@ -244,7 +244,7 @@ defmodule Hologram.ControllerTest do
 
       assert result.resp_cookies == %{
                "test_cookie" => %{
-                 value: "%Hg20AAAAKdGVzdF92YWx1ZQ",
+                 value: "test_value",
                  http_only: true,
                  same_site: "Lax",
                  secure: true
@@ -269,7 +269,7 @@ defmodule Hologram.ControllerTest do
 
       assert result.resp_cookies == %{
                "test_cookie" => %{
-                 value: "%Hg20AAAAKdGVzdF92YWx1ZQ",
+                 value: "test_value",
                  domain: "example.com",
                  http_only: false,
                  path: "/admin",
